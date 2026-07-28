@@ -485,11 +485,9 @@ A typical output tree under `results/<treatment>_vs_<control>/`:
 
 ---
 
-## Reports
-
-- **log**: The pipeline writes log output during the run. See [example](https://raw.githubusercontent.com/Yo-yerush/Methylome.Plants/refs/heads/main/output_example/Methylome.Plants_log_file.log) `.log` file.
+## HTML report
   
-- **HTML report**: *When the pipeline finishes, it automatically produces a `<contrast>_report.html` file with an analyses checklist, configurations, results summary (including plots and tables), colorized log, and session info.*
+When the pipeline finishes, it automatically produces a `<contrast>_report.html` file with an analyses checklist, configurations, results summary (including plots and tables), log, and session info. See [example](https://yo-yerush.github.io/RA_lab_db/example_reports/hen1_vs_wt_report/)
 Render it manually:
 ```r
 rmarkdown::render(
