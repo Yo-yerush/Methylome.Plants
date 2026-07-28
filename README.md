@@ -1,3 +1,30 @@
+### DONT USE THIS PIPELINE YET
+#### MAJOR BAGS IN HERE, AVAILABLE ONLY FOR ARABIDOPSIS DATA USING:
+#### [https://github.com/Yo-yerush/Methylome.At](https://github.com/Yo-yerush/Methylome.At)
+
+---
+---
+---
+---
+---
+---
+---
+---
+---
+---
+---
+---
+---
+---
+---
+---
+---
+---
+---
+---
+---
+---
+
 # Methylome.Plants
 
 Methylome.Plants is a reference-bundle-driven R pipeline for plant **WGBS** and **Nanopore** methylation data. It processes CG, CHG and CHH contexts, identifies differentially methylated regions (DMRs, using [DMRcaller](https://github.com/nrzabet/DMRcaller)), integrates assembly-matched genomic resources, and generates visualizations and annotations. A TAIR10 bundle is included as the default; additional plants are supported by supplying a species/assembly reference bundle.
