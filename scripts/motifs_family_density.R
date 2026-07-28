@@ -1,4 +1,4 @@
-TF_motifs <- function(jointed_gr, context = "all", windowSize = 1e6, DMP_fdr = 0.05, ann.gr, tfbs_path = "https://github.com/Yo-yerush/Methylome.Plants/raw/refs/heads/main/annotation_files/TAIR10_compressed_TFBSs.bed.gz") {
+TF_motifs <- function(jointed_gr, context = "all", windowSize = 1e6, DMP_fdr = 0.05, ann.gr, tfbs_path = "https://github.com/Yo-yerush/Methylome.At/raw/refs/heads/main/annotation_files/TAIR10_compressed_TFBSs.bed.gz") {
     if (context != "all") {
         jointed_gr <- jointed_gr[which(jointed_gr$context == context)]
         out_file_name <- paste0(context, "_TFs_superfamilies_DMPs_density")

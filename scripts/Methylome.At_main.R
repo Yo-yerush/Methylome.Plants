@@ -1,8 +1,8 @@
-Methylome.Plants_main <- function(var1, # control
+Methylome.At_main <- function(var1, # control
                               var2, # treatment
                               var1_path,
                               var2_path,
-                              Methylome.Plants_path = ".",
+                              Methylome.At_path = ".",
                               annotation_file = "./annotation_files/At_custom_annotations.csv.gz",
                               description_file = "./annotation_files/At_custom_annotations.csv.gz",
                               TEs_file = "./annotation_files/At_custom_annotations.csv.gz",
@@ -38,7 +38,7 @@ Methylome.Plants_main <- function(var1, # control
   start_time <- Sys.time()
   time_msg <<- function(suffix = "\t") paste0(format(Sys.time(), "[%H:%M]"), suffix)
   sep_cat <- function(x, short = F) paste0("\n---- ", x, " ", paste(rep("-", ifelse(short, 20, 50) - nchar(x)), collapse = ""), "\n")
-  scripts_dir <- paste0(Methylome.Plants_path, "/scripts")
+  scripts_dir <- paste0(Methylome.At_path, "/scripts")
 
   # source all R scripts
   script_files <- list.files(scripts_dir, pattern = "\\.R$", full.names = TRUE)
@@ -60,7 +60,7 @@ Methylome.Plants_main <- function(var1, # control
 
   ###########################################################################
 
-  setwd(Methylome.Plants_path)
+  setwd(Methylome.At_path)
 
   ##### read annotation and description files #####
   cat("\rload annotations and description files [0/3]")
@@ -119,7 +119,7 @@ Methylome.Plants_main <- function(var1, # control
   cat("\n\n")
 
   ###########################################################################
-  setwd(Methylome.Plants_path)
+  setwd(Methylome.At_path)
 
   is_single <- (length(var1_path) == 1 & length(var2_path) == 1) # both genotypes includes 1 sample
   is_Replicates <- (length(var1_path) > 1 & length(var2_path) > 1) # both genotypes includes >1 samples
@@ -177,7 +177,7 @@ Methylome.Plants_main <- function(var1, # control
 
   # new folders path names
   comparison_name <- paste0(var2, "_vs_", var1)
-  exp_path <- paste0(Methylome.Plants_path, "/results/", comparison_name)
+  exp_path <- paste0(Methylome.At_path, "/results/", comparison_name)
 
   qc_dir_path <- paste0(exp_path, "/QC")
 
@@ -201,7 +201,7 @@ Methylome.Plants_main <- function(var1, # control
   DMV_analysis_path <- paste0(exp_path, "/DMV_analysis")
   metaPlot_path <- paste0(exp_path, "/MetaPlots")
 
-  TAIR10_TFBS_file <- paste0(Methylome.Plants_path, "/annotation_files/TAIR10_compressed_TFBSs.bed.gz")
+  TAIR10_TFBS_file <- paste0(Methylome.At_path, "/annotation_files/TAIR10_compressed_TFBSs.bed.gz")
 
   dir.create(exp_path, showWarnings = F)
   setwd(exp_path)
@@ -244,7 +244,7 @@ Methylome.Plants_main <- function(var1, # control
           meth_var1_replicates, meth_var2_replicates,
           var1, var2, var1_path, var2_path,
           annotation.gr, TE_gr,
-          Methylome.Plants_path = Methylome.Plants_path
+          Methylome.At_path = Methylome.At_path
         )
       },
       error = function(cond) {
@@ -1058,13 +1058,13 @@ Methylome.Plants_main <- function(var1, # control
     try({
       suppressWarnings({
         rmarkdown::render(
-          file.path(scripts_dir, "/Methylome.Plants_report.Rmd"),
+          file.path(scripts_dir, "/Methylome.At_report.Rmd"),
           params = list(
             var1 = var1,
             var2 = var2,
             var1_path = var1_path,
             var2_path = var2_path,
-            Methylome.Plants_path = Methylome.Plants_path,
+            Methylome.At_path = Methylome.At_path,
             annotation_file = annotation_file,
             description_file = description_file,
             TEs_file = TEs_file,
@@ -1112,7 +1112,7 @@ Methylome.Plants_main <- function(var1, # control
 
   ###########################################################################
 
-  setwd(Methylome.Plants_path)
+  setwd(Methylome.At_path)
   message(paste0("**\t", var2, " vs ", var1, ": done\n"))
   cat("\n", rep("-", 56), sep = "")
 

@@ -1,6 +1,6 @@
-# Methylome.Plants
+# Methylome.At
 
-Methylome.Plants is a comprehensive, R-based pipeline for *Arabidopsis thaliana* that processes post-alignment **WGBS** or **Nanopore** sequencing data for CG, CHG and CHH DNA methylation contexts, identifies differentially methylated regions (DMRs, using [DMRcaller](https://github.com/nrzabet/DMRcaller) package) to replicates/single samples data, integrates multiple genomic resources for functional interpretation, and generates extensive visualizations and annotations to advance understanding of plant epigenetic regulation.
+Methylome.At is a comprehensive, R-based pipeline for *Arabidopsis thaliana* that processes post-alignment **WGBS** or **Nanopore** sequencing data for CG, CHG and CHH DNA methylation contexts, identifies differentially methylated regions (DMRs, using [DMRcaller](https://github.com/nrzabet/DMRcaller) package) to replicates/single samples data, integrates multiple genomic resources for functional interpretation, and generates extensive visualizations and annotations to advance understanding of plant epigenetic regulation.
 
 ---
 
@@ -209,8 +209,8 @@ plyranges
 ### 1) Download the source code
 
 ```bash
-git clone https://github.com/Yo-yerush/Methylome.Plants.git
-cd ./Methylome.Plants
+git clone https://github.com/Yo-yerush/Methylome.At.git
+cd ./Methylome.At
 ```
 
 ### 2) Setup the conda environment
@@ -232,13 +232,13 @@ chmod +x ./setup_env.sh
 ```bash
 packages=("r-curl" "r-rcurl" "zlib" "r-textshaping" "harfbuzz" "fribidi" "freetype" "libpng" "pkg-config" "libxml2" "r-xml" "bioconductor-rsamtools" "r-svglite") 
 
-conda create --name Methylome.Plants_env
-conda activate Methylome.Plants_env
+conda create --name Methylome.At_env
+conda activate Methylome.At_env
 conda install -c conda-forge -c bioconda r-base=4.4.2 ${packages[@]}
 
 Rscript scripts/install_R_packages.R
 
-chmod +x ./Methylome.Plants_UI.sh
+chmod +x ./Methylome.At_UI.sh
 chmod +x ./scripts/*.At.sh
 ```
 
@@ -271,7 +271,7 @@ mto1    /data/mto1_rep3.CX_report.txt
 
 ### 2) Supported methylation call formats
 
-Methylome.Plants supports:
+Methylome.At supports:
 
 - **Bismark `CX_report`** (WGBS)
 - **Nanopore `bedMethyl`** (recommended to generate using a plant-aware caller such as deepsignal-plant; trinucleotide column is optional)
@@ -307,11 +307,11 @@ You can either:
 ./scripts/bedmethyl_2_cx.sh -i /path/to/input.bed -t /path/to/genome_dir/ -o output_prefix
 ```
 * *genome file as `.fasta` or `.fa`*
-* *trinucleotide context are **not required** for `Methylome.Plants` pipeline*
+* *trinucleotide context are **not required** for `Methylome.At` pipeline*
   
 ### 3) Annotation and description files
 
-By default, Methylome.Plants expects:
+By default, Methylome.At expects:
 - a genome annotation file or table (`gtf`/`gff`/`gff3`/`csv`)
 - a gene description table (adds functional descriptions to outputs)
 - a TE annotation file (TAIR10 “Transposable Elements” style)
@@ -321,12 +321,12 @@ If you provide custom files, ensure they contain the columns required by the ann
 
 ---
 
-## Running Methylome.Plants
+## Running Methylome.At
 
 ### UI mode
 
 ```bash
-./Methylome.Plants_UI.sh
+./Methylome.At_UI.sh
 ```
 
 ### Manual mode
@@ -334,15 +334,15 @@ If you provide custom files, ensure they contain the columns required by the ann
 #### Main pipeline
 
 ```bash
-./scripts/Methylome.Plants.sh /path/to/samples_table.txt
+./scripts/Methylome.At.sh /path/to/samples_table.txt
 ```
 
 #### Usage:
 
 ```text
-$ ./scripts/Methylome.Plants.sh --help
+$ ./scripts/Methylome.At.sh --help
 
-Usage: ./scripts/Methylome.Plants.sh [samples_file] [options]
+Usage: ./scripts/Methylome.At.sh [samples_file] [options]
 
 Required argument:
   --samples_file                Path to samples file [required]
@@ -352,10 +352,10 @@ Optional arguments:
   --n_cores                     Number of cores [default: 8]
   --image_type                  Output images format [default: 'pdf']
   --file_type                   Post-alignment file type - 'CX_report', 'bedMethyl' and 'CGmap' [default: 'CX_report' OR determine automatically]
-  --annotation_file             Genome Annotation file [default: Methylome.Plants annotations file (TAIR10 based)]
-  --description_file            Description file [default: Methylome.Plants description file]
+  --annotation_file             Genome Annotation file [default: Methylome.At annotations file (TAIR10 based)]
+  --description_file            Description file [default: Methylome.At description file]
   --TEs_file                    Transposable Elements file [default: TAIR10 'Transposable Elements' annotations]
-  --Methylome_At_path           Path to Methylome.Plants [default: /home/yoyerush]
+  --Methylome_At_path           Path to Methylome.At [default: /home/yoyerush]
 
 DMRs analysis arguments:
   --minProportionDiff_CG        Minimum proportion difference for CG [default: 0.4]
@@ -439,15 +439,15 @@ A typical output tree under `results/<treatment>_vs_<control>/`:
 
 ## Reports
 
-- **log**: The pipeline writes log output during the run. See [example](https://raw.githubusercontent.com/Yo-yerush/Methylome.Plants/refs/heads/main/output_example/Methylome.Plants_log_file.log) `.log` file.
+- **log**: The pipeline writes log output during the run. See [example](https://raw.githubusercontent.com/Yo-yerush/Methylome.At/refs/heads/main/output_example/Methylome.At_log_file.log) `.log` file.
   
 - **HTML report**: *When the pipeline finishes, it automatically produces a `<contrast>_report.html` file with an analyses checklist, configurations, results summary (including plots and tables), colorized log, and session info.*
 Render it manually:
 ```r
 rmarkdown::render(
-  "scripts/Methylome.Plants_report.Rmd",
+  "scripts/Methylome.At_report.Rmd",
   params = list(var1 = "wt", var2 = "mt1",
-                Methylome.Plants_path = "."),
+                Methylome.At_path = "."),
   output_file = "mt1_vs_wt_report.html"
 )
 ```
@@ -472,7 +472,7 @@ Options:
 -n, --ncores    Number of cores (max). multiples of 4 recommended [default: 8]
 -m, --mem       Buffer size for 'bismark_methylation_extractor' [default: 8G]
 --cx            Produce and keep only '_CX_report.txt.gz' file
---mat           Produce samples table (.txt) for 'Methylome.Plants' pipeline
+--mat           Produce samples table (.txt) for 'Methylome.At' pipeline
 --indx          Keep the genome index directory (applies only if --cx is on)
 --sort          Sort & index BAM files (applies only if --cx is off)
 --strand        Keep top/bottom strand (OT/OB) files [remove in default]
@@ -507,7 +507,7 @@ wt_2    PATH/TO/FILE/wt2_R2.fastq
 #### Run
 
 - *Use `-g TAIR10` for the standart reference genome of Arabidopsis (auto-download FASTA)*
-- *Add `--mat` to create a ready-to-use samples table for Methylome.Plants*
+- *Add `--mat` to create a ready-to-use samples table for Methylome.At*
 - *Add `--cx` to produce and Keep only `*_CX_report.txt.gz` files*
 
 ```bash
@@ -526,4 +526,4 @@ wt_2    PATH/TO/FILE/wt2_R2.fastq
 
 ## License
 
-This project is licensed under the [MIT License](https://github.com/Yo-yerush/Methylome.Plants/blob/main/LICENSE).
+This project is licensed under the [MIT License](https://github.com/Yo-yerush/Methylome.At/blob/main/LICENSE).

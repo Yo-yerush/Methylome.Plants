@@ -14,7 +14,7 @@ params:
   var2: null
   var1_path: null
   var2_path: null
-  Methylome.Plants_path: "."
+  Methylome.At_path: "."
 
   annotation_file: "./annotation_files/At_custom_annotations.csv.gz"
   description_file: "./annotation_files/At_custom_annotations.csv.gz"
@@ -87,8 +87,8 @@ stop_if_missing <- function(x, name) {
 stop_if_missing(params$var1, "var1")
 stop_if_missing(params$var2, "var2")
 
-root <- params$Methylome.Plants_path
-if (!dir.exists(root)) stop("Methylome.Plants_path does not exist: ", root)
+root <- params$Methylome.At_path
+if (!dir.exists(root)) stop("Methylome.At_path does not exist: ", root)
 knitr::opts_knit$set(root.dir = root)
 
 comparison_name <- paste0(params$var2, "_vs_", params$var1)
@@ -98,7 +98,7 @@ if (!dir.exists(file.path(root, exp_path)) && !dir.exists(exp_path)) {
   stop("Results folder not found: ", exp_path)
 }
 
-# Output folders (match Methylome.Plants_main.R)
+# Output folders (match Methylome.At_main.R)
 qc_dir_path <- file.path(exp_path, "QC")
 total_meth_path <- file.path(exp_path, "total_methylation_analysis")
 PCA_plots_path <- file.path(total_meth_path, "PCA_plots")
@@ -282,13 +282,13 @@ cat(sprintf('<style>
 </style>', as.integer(params$plot_max_width_px), as.integer(params$plot_max_height_px), as.integer(params$plot_gap_px)))
 ```
 
-[Methylome.Plants](https://github.com/Yo-yerush/Methylome.Plants) report. *`r format(Sys.Date(), '%d, %B, %Y')`*
+[Methylome.At](https://github.com/Yo-yerush/Methylome.At) report. *`r format(Sys.Date(), '%d, %B, %Y')`*
 
 ## `r params$var2` *vs.* `r params$var1` results overview {.tabset}
 
 ### Introduction
 
-This report summarizes the results of the **Methylome.Plants** pipeline, an automated workflow for analyzing whole-genome bisulfite sequencing (WGBS) data in *Arabidopsis thaliana*. The pipeline performs quality control, computes global and context-specific DNA methylation levels, identifies differentially methylated regions (DMRs), and generates a variety of visualizations and summary tables. It is designed to facilitate reproducible, comprehensive methylome comparisons between experimental conditions or genotypes.
+This report summarizes the results of the **Methylome.At** pipeline, an automated workflow for analyzing whole-genome bisulfite sequencing (WGBS) data in *Arabidopsis thaliana*. The pipeline performs quality control, computes global and context-specific DNA methylation levels, identifies differentially methylated regions (DMRs), and generates a variety of visualizations and summary tables. It is designed to facilitate reproducible, comprehensive methylome comparisons between experimental conditions or genotypes.
 
 **Key features of the pipeline:**
 
@@ -835,7 +835,7 @@ decrip3 <- c(
 decrip2 <- c(
   "Path to first sample methylation file",
   "Path to second sample methylation file",
-  "Path to Methylome.Plants project root",
+  "Path to Methylome.At project root",
   "Genome Annotation file",
   "Description file",
   "Transposable Elements file"

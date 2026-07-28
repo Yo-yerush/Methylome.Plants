@@ -57,10 +57,10 @@ usage() {
   echo "  --n_cores                     Number of cores [default: $n_cores]"
   echo "  --image_type                  Output images format [default: '$img_type']"
   echo "  --file_type                   Post-alignment file type - 'CX_report', 'bedMethyl' and 'CGmap' [default: '$methyl_files_type' OR determine automatically]"
-  echo "  --annotation_file             Genome Annotation file [default: Methylome.Plants annotations file (TAIR10 based)]"
-  echo "  --description_file            Description file [default: Methylome.Plants description file]"
+  echo "  --annotation_file             Genome Annotation file [default: Methylome.At annotations file (TAIR10 based)]"
+  echo "  --description_file            Description file [default: Methylome.At description file]"
   echo "  --TEs_file                    Transposable Elements file [default: TAIR10 'Transposable Elements' annotations]"
-  echo "  --Methylome_At_path           Path to Methylome.Plants [default: $Methylome_At_path]"
+  echo "  --Methylome_At_path           Path to Methylome.At [default: $Methylome_At_path]"
   echo ""
   echo "DMRs analysis arguments:"
   echo "  --minProportionDiff_CG        Minimum proportion difference for CG [default: $minProportionDiff_CG]"
@@ -258,7 +258,7 @@ echo "Samples file: $samples_file"
 echo "Annotation file: $annotation_file"
 echo "Description file: $description_file"
 echo "Transposable Elements file: $TEs_file"
-echo "Methylome.Plants directory path: $Methylome_At_path"
+echo "Methylome.At directory path: $Methylome_At_path"
 echo ""
 echo "Analyze DMRs workflow: $DMR_analysis"
 echo "Analyze strand-specific DMRs: $strand_DMRs"
@@ -279,7 +279,7 @@ echo "**  $treatment_s VS. $control_s" >> "$log_file"
 echo "" >> "$log_file"
 
 # Call the R script with the arguments
-Rscript ./scripts/Methylome.Plants_run.R \
+Rscript ./scripts/Methylome.At_run.R \
 "$samples_file" \
 "$Methylome_At_path" \
 "$annotation_file" \

@@ -1,6 +1,10 @@
 cff-version: 1.2.0
 message: "If you use this pipeline, please cite it using the metadata below."
-title: "Methylome.Plants: A Comprehensive Pipeline for Plant Whole-Genome Methylome Analysis"
+<<<<<<< HEAD
+title: "Methylome.At: A Comprehensive Pipeline for Arabidopsis Whole-Genome Methylome Analysis"
+=======
+title: "Methylome.At: A Comprehensive Pipeline for Plant Whole-Genome Methylome Analysis"
+>>>>>>> a52794fd77ea3da423cbb7e9b953faf260d3101e
 type: software
 
 authors:
@@ -12,8 +16,13 @@ authors:
     given-names: Rachel
 
 abstract: >-
-  Methylome.Plants is an R- and shell-based pipeline for downstream analysis
+<<<<<<< HEAD
+  Methylome.At is an R- and shell-based pipeline for downstream analysis
+  of Arabidopsis whole-genome DNA methylation data. It supports WGBS, Nanopore
+=======
+  Methylome.At is an R- and shell-based pipeline for downstream analysis
   of plant whole-genome DNA methylation data. It supports WGBS, Nanopore
+>>>>>>> a52794fd77ea3da423cbb7e9b953faf260d3101e
   bedMethyl, and CGmap inputs and integrates methylation quality control,
   differential methylation analysis, genomic and transposable-element
   annotation, visualization, functional enrichment, and automated reporting.
@@ -25,7 +34,11 @@ keywords:
   - functional enrichment
   - bioinformatics
 
-repository-code: "https://github.com/Yo-yerush/Methylome.Plants"
+<<<<<<< HEAD
+repository-code: "https://github.com/Yo-yerush/Methylome.At"
+=======
+repository-code: "https://github.com/Yo-yerush/Methylome.At"
+>>>>>>> a52794fd77ea3da423cbb7e9b953faf260d3101e
 
 license: GPL-3.0-only
 

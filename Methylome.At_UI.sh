@@ -7,13 +7,13 @@ cd "$Methylome_At_path"
 #####################################
 # Initialize and Activate Conda Env
 #####################################
-if [ "$CONDA_DEFAULT_ENV" != "Methylome.Plants_env" ]; then
+if [ "$CONDA_DEFAULT_ENV" != "Methylome.At_env" ]; then
   eval "$(conda shell.bash hook)"
-  conda activate Methylome.Plants_env
+  conda activate Methylome.At_env
   
-  if [ "$CONDA_DEFAULT_ENV" != "Methylome.Plants_env" ]; then
-    echo "Error: Failed to activate the 'Methylome.Plants_env' Conda environment."
-    echo "Please activate it manually using 'conda activate Methylome.Plants_env' and rerun the script."
+  if [ "$CONDA_DEFAULT_ENV" != "Methylome.At_env" ]; then
+    echo "Error: Failed to activate the 'Methylome.At_env' Conda environment."
+    echo "Please activate it manually using 'conda activate Methylome.At_env' and rerun the script."
     exit 1
   fi
 fi
@@ -25,7 +25,7 @@ fi
 SCRIPT_BIS_DEFAULT_genome="TAIR10"
 SCRIPT_BIS_DEFAULT_ncores="8"
 
-# Default parameters for Methylome.Plants.sh:
+# Default parameters for Methylome.At.sh:
 SCRIPT1_DEFAULT_minProportionDiff_CG="0.4"
 SCRIPT1_DEFAULT_minProportionDiff_CHG="0.2"
 SCRIPT1_DEFAULT_minProportionDiff_CHH="0.1"
@@ -61,7 +61,7 @@ SCRIPT1_DEFAULT_metaPlot_random_genes="10000"
 
 # Paths to the scripts we want to run (adjust if needed)
 SCRIPT_BIS_PATH="./scripts/run_bismark.sh"
-SCRIPT1_PATH="./scripts/Methylome.Plants.sh"
+SCRIPT1_PATH="./scripts/Methylome.At.sh"
 
 ##################
 # WHIPTAIL DIALOGS
@@ -72,7 +72,7 @@ CHOICE=$(whiptail --title "Choose scripts to run" \
   --checklist "Select which pipeline(s) to run. Use SPACE to toggle selection, ENTER to confirm, ESC to cancle." \
   18 70 3 \
   "Bismark" "Run genome alignment with Bismark" OFF \
-  "Methylome.Plants" "Run main methylome pipeline'" ON \
+  "Methylome.At" "Run main methylome pipeline'" ON \
   3>&1 1>&2 2>&3)
 
 # If user hits Cancel or ESC, exit
@@ -137,7 +137,7 @@ edit_script1_parameters() {
 
   # Parameters are expected to be set before calling this function
   while true; do
-        OPTION=$(whiptail --title "'Methylome.Plants' Parameters" \
+        OPTION=$(whiptail --title "'Methylome.At' Parameters" \
             --menu "Select a parameter to change or proceed with current settings." 40 50 33 \
             "Proceed."                "$(fmt '' 'Use current parameters')" \
             "Set off"       "$(fmt '' 'Turn OFF all analyses')" \
@@ -456,9 +456,9 @@ if [[ " ${SELECTED_SCRIPTS[*]} " =~ "Bismark" ]]; then
 fi
 
 ###################
-# Gather Methylome.Plants.sh
+# Gather Methylome.At.sh
 ###################
-if [[ " ${SELECTED_SCRIPTS[*]} " =~ "Methylome.Plants" ]]; then
+if [[ " ${SELECTED_SCRIPTS[*]} " =~ "Methylome.At" ]]; then
     # Initialize parameters with defaults
     SCRIPT1_minProportionDiff_CG="$SCRIPT1_DEFAULT_minProportionDiff_CG"
     SCRIPT1_minProportionDiff_CHG="$SCRIPT1_DEFAULT_minProportionDiff_CHG"
@@ -506,8 +506,8 @@ chosen_message=""
 if [[ " ${SELECTED_SCRIPTS[*]} " =~ "Bismark" ]]; then
     chosen_message+="'Bismark' "
 fi
-if [[ " ${SELECTED_SCRIPTS[*]} " =~ "Methylome.Plants" ]]; then
-    chosen_message+="'Methylome.Plants' "
+if [[ " ${SELECTED_SCRIPTS[*]} " =~ "Methylome.At" ]]; then
+    chosen_message+="'Methylome.At' "
 fi
 
 # Trim trailing space
@@ -533,9 +533,9 @@ if (whiptail --title "All done!" --yesno "You have chosen to run: $chosen_messag
 
   cd "$Methylome_At_path"
 
-  # Methylome.Plants pipeline invocation
-  if [[ " ${SELECTED_SCRIPTS[*]} " =~ "Methylome.Plants" ]]; then
-    echo "Running Methylome.Plants.sh..."
+  # Methylome.At pipeline invocation
+  if [[ " ${SELECTED_SCRIPTS[*]} " =~ "Methylome.At" ]]; then
+    echo "Running Methylome.At.sh..."
     bash "$SCRIPT1_PATH" \
       --samples_file "$SAMPLES_FILE_CX" \
       --minProportionDiff_CG "$SCRIPT1_minProportionDiff_CG" \

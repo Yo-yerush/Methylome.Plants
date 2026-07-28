@@ -46,14 +46,14 @@ rmv_d <- function(x) {
 }
 
 # run the main function
-source(paste0(rmv_d(configs[2]), "/scripts/Methylome.Plants_main.R"))
+source(paste0(rmv_d(configs[2]), "/scripts/Methylome.At_main.R"))
 try({
-  Methylome.Plants_main(
+  Methylome.At_main(
     var1 = vars_vector[1],
     var2 = vars_vector[2],
     var1_path = var1_path,
     var2_path = var2_path,
-    Methylome.Plants_path = rmv_d(configs[2]),
+    Methylome.At_path = rmv_d(configs[2]),
     annotation_file = configs[3],
     description_file = configs[4],
     TEs_file = configs[5],
