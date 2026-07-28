@@ -1,0 +1,7 @@
+seqnames,start,end,strand,feature,locus,biotype
+linkage_A,100,900,+,gene,SYN001,coding
+linkage_A,150,300,+,CDS,SYN001,coding
+linkage_A,301,400,+,intron,SYN001,coding
+linkage_A,401,800,+,CDS,SYN001,coding
+linkage_B,200,700,-,gene,SYN002,coding
+linkage_B,250,650,-,CDS,SYN002,coding

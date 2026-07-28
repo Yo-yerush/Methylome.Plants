@@ -1,0 +1,33 @@
+cff-version: 1.2.0
+message: "If you use this pipeline, please cite it using the metadata below."
+title: "Methylome.Plants: A Comprehensive Pipeline for Plant Whole-Genome Methylome Analysis"
+type: software
+
+authors:
+  - family-names: Yerushalmy
+    given-names: Yonatan
+    orcid: "https://orcid.org/0009-0005-2671-2457"
+
+  - family-names: Amir
+    given-names: Rachel
+
+abstract: >-
+  Methylome.Plants is an R- and shell-based pipeline for downstream analysis
+  of plant whole-genome DNA methylation data. It supports WGBS, Nanopore
+  bedMethyl, and CGmap inputs and integrates methylation quality control,
+  differential methylation analysis, genomic and transposable-element
+  annotation, visualization, functional enrichment, and automated reporting.
+
+keywords:
+  - methylome
+  - differential methylation
+  - DESeq2
+  - functional enrichment
+  - bioinformatics
+
+repository-code: "https://github.com/Yo-yerush/Methylome.Plants"
+
+license: GPL-3.0-only
+
+version: 0.9.0
+date-released: "2026-07-28"

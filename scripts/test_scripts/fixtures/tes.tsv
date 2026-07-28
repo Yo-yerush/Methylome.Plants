@@ -1,0 +1,3 @@
+seqnames	start	end	strand	repeat_id	family	class
+linkage_A	1200	1700	+	REP001	FAM1	DNA
+linkage_B	900	1400	-	REP002	FAM2	LTR

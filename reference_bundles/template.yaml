@@ -1,0 +1,64 @@
+schema_version: 1
+
+species:
+  id: genus_species
+  display_name: Genus species
+  assembly: assembly_name
+
+genome:
+  # Paths are relative to this YAML file unless absolute.
+  fasta: null
+  chromosome_sizes: chromosome_sizes.tsv
+  seqname_aliases: seqname_aliases.tsv
+  primary_seqlevels: []
+  chloroplast_seqlevels: []
+  mitochondrial_seqlevels: []
+  include_non_primary: false
+
+annotation:
+  genes: genes.gff3
+  format: gff3
+  gene_id_field: gene_id
+  transcript_id_field: transcript_id
+  biotype_field: gene_biotype
+  feature_type_field: type
+  protein_coding_values: [protein_coding, protein_coding_gene]
+  promoter_upstream: 2000
+  # Optional mapping from source feature names to the normalized names used by
+  # the pipeline: gene, CDS, intron, five_prime_UTR, three_prime_UTR.
+  feature_type_map: {}
+
+  descriptions: null
+  description_gene_id_field: gene_id
+
+  transposable_elements: null
+  te_format: gff3
+  te_id_field: ID
+  te_family_field: family
+  te_superfamily_field: superfamily
+
+regions:
+  # BED files are zero-based, half-open.
+  centromeres: null
+  heterochromatin: null
+
+functional:
+  # Optional Bioconductor OrgDb configuration for topGO.
+  orgdb_package: null
+  orgdb_keytype: null
+  # Alternatively provide a table with gene_id and go_id columns.
+  gene_to_go: null
+
+  # Optional KEGG organism code, e.g. osa for Oryza sativa.
+  kegg_organism: null
+  # Optional table mapping gene_id to the identifiers returned by KEGG.
+  kegg_id_map: null
+
+  # Optional BED9 TF binding sites.
+  tfbs: null
+
+  # Optional two-column group/gene_id TSV or GMT file.
+  gene_sets: null
+
+  stable_gbm: null
+  dynamic_gbm: null

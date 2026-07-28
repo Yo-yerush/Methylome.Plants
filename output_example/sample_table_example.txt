@@ -1,0 +1,5 @@
+wt	PATH/TO/CX_files/wt_1.CX_report.txt
+wt	PATH/TO/CX_files/wt_2.CX_report.txt
+mto1	PATH/TO/CX_files/mto1_1.CX_report.txt
+mto1	PATH/TO/CX_files/mto1_2.CX_report.txt
+mto1	PATH/TO/CX_files/mto1_3.CX_report.txt

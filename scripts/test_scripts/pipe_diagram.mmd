@@ -1,0 +1,111 @@
+%%{init: {'theme':'redux-dark', 'themeVariables': { 'fontFamily':'Georgia, Times New Roman, serif', 'fontSize':'60px'}, 'flowchart': {'nodeSpacing':100, 'rankSpacing': 100}}}%%
+
+flowchart LR
+    %% Inputs
+    subgraph INPUT[" "]
+        direction TB
+        SF[Samples File]
+        FASTQ[Raw FASTQ]
+        TAIR[Genome annotation]
+        TEs[TEs annotation]
+        GeneDesc[Gene descriptions]
+    end
+    
+    %% Pre-processing
+    subgraph PREPROC["<i>(optional)</i>"]
+        direction LR
+        Trim[Trim reads]
+        Bismark[Bismark alignment]
+        MethEx[Methylation extractor]
+    end
+    
+    %% CX Reports
+    CX[CX_report files]
+    
+    %% Loading Data
+    LOAD["Load_methylation_data<br/><i>(single/replicate samples)</i><br/>"]
+    
+    %% QC
+    QC[QC:<br>Chloroplast C→T conversion]
+        
+    %% Visualizations
+    subgraph VIZ["<i>Visualizations</i>"]
+        direction TB
+        TotalMeth[Total methylation levels]
+        PCA[PCA of samples]
+        ChrPlots[ChrPlots genome-wide]
+
+        SIZE[Δ <i>vs.</i> TE size]
+        DISTANCE[Δ <i>vs.</i> TE distance-from-centromere]
+        %%%% TE delta analyses
+        %%subgraph TEdelta[" "]
+        %%    direction TB
+        %%    SIZE[Δ-methylation <i>vs.</i> TE size]
+        %%    DISTANCE[Δ-methylation by TE distance-from-centromere]
+        %%end
+    end
+
+    %% DMR Calling
+    %%DMRCALL[Call DMRs<br/><i>Single/replicate samples</i><br/>]
+    DMRCALL["DMR calling"]
+    
+    %% DMR Annotation
+    subgraph ANNOT[" "]
+
+        %% DMR vissualizations
+        subgraph DIST["<i>Visualizations</i>"]
+            direction TB
+            DMRdist[DMR distribution]
+            DMRpie[Gain/Loss: pie & ratio distribution]
+            DMRchrplot[ChrPlots DMRs]
+        end
+
+        direction TB
+        DMRannot[DMR annotation]
+        GbDMR[Gene-body DMRs]
+        GbFeature[<i>Promoter/CDS/Intron/ 5'UTR/3'UTR/TEG/pseudogene</i>]
+        teDMR["Transposable element DMRs"]
+        
+        subgraph TEdown[" "]
+            direction TB
+            SFf[Super-family frequency]
+            SFd[Super-family distribution]
+        end
+
+    end
+    
+    %% Meta Plots
+    subgraph META["<i>(optional)</i>"]
+        direction TB
+        Meta[MetaPlots]    
+        %% dH Analysis
+        dH["ΔH_analysis (entropy)"]
+    end
+    
+    %% Functional Analysis
+    subgraph func["<i>(optional)</i>"]
+        direction TB
+        GO[GO_enrichment]
+        KEGG[KEGG_pathways]
+    end
+
+
+    %% Flow
+    FASTQ --> PREPROC
+    Trim --> Bismark --> MethEx --> CX
+    SF --> CX
+    %%LOAD --> TEdelta
+    CX --> LOAD
+    LOAD --> DMRCALL
+    LOAD --> VIZ
+    LOAD --> META
+    LOAD --> QC
+    TEs --> teDMR
+    TAIR --> LOAD
+    TEs --> VIZ
+    %%TAIR --> GbFeature
+    DMRCALL --> DIST
+    DMRCALL --> DMRannot
+    DMRannot --> GbDMR --> GbFeature --> func
+    GeneDesc --> DMRannot
+    DMRannot --> teDMR --> TEdown

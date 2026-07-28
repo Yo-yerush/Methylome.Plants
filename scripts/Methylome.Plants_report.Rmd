@@ -1,0 +1,979 @@
+---
+title: "&#32;"
+output:
+  html_document:
+    toc: false
+    toc_float: false
+    number_sections: false
+    df_print: paged
+    self_contained: true
+    theme: united
+
+params:
+  var1: null
+  var2: null
+  var1_path: null
+  var2_path: null
+  Methylome.Plants_path: "."
+
+  annotation_file: null
+  description_file: null
+  TEs_file: null
+  reference_bundle_path: null
+  species_name: "Plant"
+  assembly_name: "custom"
+
+  minProportionDiff: [0.4, 0.2, 0.1]    # CG, CHG, CHH
+  binSize: 100
+  minCytosinesCount: 4
+  minReadsPerCytosine: 4
+  pValueThreshold: 0.05
+  methyl_files_type: "CX_report"
+  img_type: "png"
+  n.cores: 8
+
+  analyze_DMRs: true
+  run_QC: true
+  run_PCA_plot: true
+  run_total_meth_plot: true
+  run_CX_Chrplot: true
+  run_TEs_distance_n_size: true
+  total_meth_annotation: true
+  run_TF_motifs: true
+  run_functional_groups: true
+  run_GO_analysis: false
+  run_KEGG_pathways: false
+
+  analyze_strand_asymmetry_DMRs: false
+  analyze_DMVs: false
+  analyze_dH: false
+  run_TE_metaPlots: false
+  run_GeneBody_metaPlots: false
+  run_GeneFeatures_metaPlots: false
+  gene_features_binSize: 10
+  metaPlot.random.genes: 10000
+
+  # ---------------------------
+  # Report layout (images only)
+  # ---------------------------
+  plot_max_width_px: 1100      # max width for each plot
+  plot_max_height_px: 500      # cap plot height (prevents huge SVG/PNG)
+  plot_gap_px: 5              # gap between plots in grids
+  default_plot_cols: 1         # default columns for multi-plot sections
+
+  # If TRUE: copy plots next to the HTML (robust links even when HTML is saved inside results/<comparison>)
+  copy_images_next_to_report: true
+---
+
+<style type="text/css">
+.main-container {
+  max-width: 1800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+suppressPackageStartupMessages({ library(knitr) })
+
+# Wrapper: run code block, catch any error and print a warning instead of stopping
+safe_section <- function(expr) {
+  tryCatch(expr, error = function(e) {
+    cat(sprintf("\n\n<div style='color:#cb0a0a; border:1px solid #cb0a0a; padding:8px; border-radius:4px;'>**Error rendering section:** %s</div>\n\n", conditionMessage(e)))
+  })
+}
+
+stop_if_missing <- function(x, name) {
+  if (is.null(x) || length(x) == 0 || !nzchar(as.character(x)[1])) stop("Missing required param: ", name)
+}
+stop_if_missing(params$var1, "var1")
+stop_if_missing(params$var2, "var2")
+
+root <- params$Methylome.Plants_path
+if (!dir.exists(root)) stop("Methylome.Plants_path does not exist: ", root)
+knitr::opts_knit$set(root.dir = root)
+
+comparison_name <- paste0(params$var2, "_vs_", params$var1)
+exp_path <- file.path("results", comparison_name)
+if (!dir.exists(file.path(root, exp_path)) && !dir.exists(exp_path)) {
+  # When root.dir is set, relative paths are resolved from it. This check is defensive.
+  stop("Results folder not found: ", exp_path)
+}
+
+# Output folders (match Methylome.Plants_main.R)
+qc_dir_path <- file.path(exp_path, "QC")
+total_meth_path <- file.path(exp_path, "total_methylation_analysis")
+PCA_plots_path <- file.path(total_meth_path, "PCA_plots")
+meth_levels_path <- file.path(total_meth_path, "methylation_levels")
+ChrPlot_CX_path <- file.path(total_meth_path, "ChrPlot_CX")
+ChrPlot_subCX_path <- file.path(ChrPlot_CX_path, "subCX")
+TEs_distance_n_size_path <- file.path(total_meth_path, "TE_size_n_distance")
+total_meth_annotation_path <- file.path(total_meth_path, "total_methylation_annotations")
+TF_motifs_path <- file.path(total_meth_path, "TF_motifs")
+
+DMRs_analysis_path <- file.path(exp_path, "DMR_analysis")
+gainORloss_path <- file.path(DMRs_analysis_path, "gain_OR_loss")
+genome_ann_path <- file.path(DMRs_analysis_path, "genome_annotation")
+ChrPlots_DMRs_path <- file.path(DMRs_analysis_path, "ChrPlot_DMRs")
+DMRs_bigWig_path <- file.path(DMRs_analysis_path, "DMRs_bigWig")
+
+strand_asymmetry_path <- file.path(exp_path, "Strand_Asymmetry_DMRs")
+DMV_analysis_path <- file.path(exp_path, "DMV_analysis")
+dH_path <- file.path(exp_path, "deltaH")
+dH_ann_path <- file.path(dH_path, "genome_annotation")
+meta_dir <- file.path(exp_path, "MetaPlots")
+
+# ----------------------------
+# Plot rendering utilities (IMAGES ONLY: SVG/PNG/JPEG/TIFF)
+# ----------------------------
+
+# Determine where the HTML will be written; used for copying plot assets near the report.
+get_report_dir <- function() {
+  od <- tryCatch(knitr::opts_knit$get("output.dir"), error = function(e) NULL)
+  if (!is.null(od) && nzchar(od)) return(normalizePath(od, winslash = "/", mustWork = FALSE))
+  co <- tryCatch(knitr::current_output(), error = function(e) NULL)
+  if (!is.null(co) && nzchar(co)) return(dirname(normalizePath(co, winslash = "/", mustWork = FALSE)))
+  # common default when output_file is inside results/<comparison>
+  normalizePath(exp_path, winslash = "/", mustWork = FALSE)
+}
+report_dir <- get_report_dir()
+
+# Where we store image assets for stable linking
+assets_dir <- file.path(report_dir, paste0(comparison_name, "_plots"))
+if (isTRUE(params$copy_images_next_to_report)) dir.create(assets_dir, recursive = TRUE, showWarnings = FALSE)
+
+# Convert an absolute or relative path to a relative path under project root (root.dir)
+project_rel <- function(p) {
+  if (is.null(p) || !nzchar(p)) return(p)
+  # If already relative, keep it
+  if (!grepl("^(/|[A-Za-z]:)", p)) return(p)
+  wd <- tryCatch(normalizePath(getwd(), winslash = "/", mustWork = FALSE), error = function(e) "")
+  pa <- tryCatch(normalizePath(p, winslash = "/", mustWork = FALSE), error = function(e) p)
+  if (nzchar(wd) && startsWith(pa, paste0(wd, "/"))) sub(paste0("^", wd, "/"), "", pa) else pa
+}
+
+# Copy an image into assets_dir while preserving its relative path under exp_path
+asset_link <- function(img_file) {
+  if (!file.exists(img_file)) return(NA_character_)
+  # ignore PDFs completely (report is non-PDF)
+  if (tolower(tools::file_ext(img_file)) == "pdf") return(NA_character_)
+
+  if (!isTRUE(params$copy_images_next_to_report)) return(chartr("\\", "/", project_rel(img_file)))
+
+  exp_abs <- normalizePath(exp_path, winslash = "/", mustWork = FALSE)
+  img_abs <- normalizePath(img_file, winslash = "/", mustWork = FALSE)
+
+  rel <- if (startsWith(img_abs, paste0(exp_abs, "/"))) sub(paste0("^", exp_abs, "/"), "", img_abs) else basename(img_abs)
+  dst <- file.path(assets_dir, rel)
+  dir.create(dirname(dst), recursive = TRUE, showWarnings = FALSE)
+  file.copy(img_abs, dst, overwrite = TRUE)
+
+  # return link relative to report_dir
+  rd_abs <- normalizePath(report_dir, winslash = "/", mustWork = FALSE)
+  dst_abs <- normalizePath(dst, winslash = "/", mustWork = FALSE)
+  link <- if (startsWith(dst_abs, paste0(rd_abs, "/"))) sub(paste0("^", rd_abs, "/"), "", dst_abs) else dst_abs
+  chartr("\\", "/", link)
+}
+
+is_media <- function(x) {
+  ext <- tolower(tools::file_ext(x))
+  ext %in% c("png","jpg","jpeg","svg","tiff")
+}
+
+list_media_files <- function(dir_path, recursive = FALSE, pattern = NULL) {
+  if (!dir.exists(dir_path)) return(character())
+  files <- list.files(dir_path, full.names = TRUE, recursive = recursive)
+  files <- files[!file.info(files)$isdir]
+  files <- files[sapply(files, is_media)]
+  if (!is.null(pattern)) files <- files[grepl(pattern, basename(files), ignore.case = TRUE)]
+  files
+}
+
+context_rank <- function(x) {
+  b <- tolower(basename(x))
+  if (grepl("all_contexts|allcontexts|all", b)) return(0L)
+  if (grepl("\\bcg\\b", b)) return(1L)
+  if (grepl("\\bchg\\b", b)) return(2L)
+  if (grepl("\\bchh\\b", b)) return(3L)
+  9L
+}
+
+order_files <- function(files) {
+  if (length(files) == 0) return(files)
+  files[order(vapply(files, context_rank, integer(1)), tolower(basename(files)))]
+}
+
+emit_grid <- function(files, cols = params$default_plot_cols, max_height_px = NULL) {
+  files <- files[file.exists(files)]
+  files <- order_files(files)
+  if (length(files) == 0) {
+    cat("_No plot files found._
+
+")
+    return(invisible(NULL))
+  }
+
+  cols <- as.integer(cols)
+  if (is.na(cols) || cols < 1L) cols <- 1L
+
+  mh <- max_height_px
+  if (!is.null(mh)) {
+    mh <- as.integer(mh)
+    if (is.na(mh) || mh < 50L) mh <- NULL
+  }
+
+  if (is.null(mh)) {
+    cat(sprintf('<div class="plot-grid" style="--cols:%d;">
+', cols))
+  } else {
+    cat(sprintf('<div class="plot-grid" style="--cols:%d; --img-max-height:%dpx;">
+', cols, mh))
+  }
+
+  for (f in files) {
+    src <- asset_link(f)
+    if (is.na(src) || !nzchar(src)) next
+    cat(sprintf('  <div class="plot-cell"><img src="%s" loading="lazy"></div>
+', src))
+  }
+  cat('</div>
+
+')
+  invisible(NULL)
+}
+
+emit_dir <- function(dir_path, recursive = FALSE, cols = params$default_plot_cols, pattern = NULL, max_height_px = NULL) {
+  files <- list_media_files(dir_path, recursive = recursive, pattern = pattern)
+  emit_grid(files, cols = cols, max_height_px = max_height_px)
+}
+
+# Compact printing of params that may be vectors
+val1 <- function(x) {
+  if (is.null(x) || length(x) == 0) return(NA_character_)
+  paste(as.character(x), collapse = ", ")
+}
+```
+
+```{r plot-style, results='asis', echo=FALSE}
+cat(sprintf('<style>
+:root{
+  --plot-max-width: %dpx;
+  --plot-max-height: %dpx;
+  --plot-gap: %dpx;
+}
+.plot-grid{
+  display:flex;
+  flex-wrap:wrap;
+  gap: var(--plot-gap);
+  justify-content: center;
+  align-items:flex-start;
+  margin: 10px 0 18px 0;
+  --img-max-height: var(--plot-max-height);
+}
+.plot-cell{
+  flex: 0 0 calc((100%% - (var(--cols) - 1) * var(--plot-gap)) / var(--cols));
+  max-width: var(--plot-max-width);
+}
+.plot-cell img{
+  width:100%%;
+  height:auto;
+  max-height: var(--img-max-height);
+  object-fit: contain;
+  display:block;
+}
+</style>', as.integer(params$plot_max_width_px), as.integer(params$plot_max_height_px), as.integer(params$plot_gap_px)))
+```
+
+[Methylome.Plants](https://github.com/Yo-yerush/Methylome.Plants) report. *`r format(Sys.Date(), '%d, %B, %Y')`*
+
+## `r params$var2` *vs.* `r params$var1` results overview {.tabset}
+
+### Introduction
+
+This report summarizes the results of the **Methylome.Plants** pipeline for **`r params$species_name`** (assembly **`r params$assembly_name`**). The pipeline performs quality control, computes global and context-specific DNA methylation levels, identifies differentially methylated regions (DMRs), and generates visualizations and summary tables for reproducible methylome comparisons.
+
+**Key features of the pipeline:**
+
+- Automated QC and conversion rate estimation
+- Global and per-context methylation profiling
+- Chromosome-scale and annotation-based methylation summaries
+- DMR detection and annotation
+- Visualization of methylation patterns, PCA, and functional group overlaps
+- Optional analyses: motif enrichment, GO/KEGG, meta-plots, and more
+
+---
+
+#### Analyses checklist
+
+```{r analyses-checklist, results='asis', echo=FALSE}
+check <- function(flag) if (isTRUE(flag)) "[x]" else "[ ]"
+
+cat(sprintf("
+**QC**
+
+- %s Sample-level QC plots
+
+**Total methylation**
+
+- %s PCA (Principal Component Analysis)
+- %s Total methylation levels
+- %s Chromosome methylation profiles
+- %s TE methylation vs TE size & centromere distance
+- %s Total methylation across genome annotations
+- %s TF motif analysis
+
+**DMR analysis**
+
+- %s DMR detection & annotation
+- %s Functional groups
+- %s GO analysis
+- %s KEGG pathways
+
+**MetaPlots**
+
+- %s TE MetaPlots
+- %s Gene body MetaPlots
+- %s Gene features MetaPlots
+
+**Other analyses**
+
+- %s Strand-asymmetry DMRs
+- %s DMVs (Differentially Methylated Valleys)
+- %s ΔH / entropy (SurpDMRs)
+",
+check(params$run_QC),
+check(params$run_PCA_plot),
+check(params$run_total_meth_plot),
+check(params$run_CX_Chrplot),
+check(params$run_TEs_distance_n_size),
+check(params$total_meth_annotation),
+check(params$run_TF_motifs),
+check(params$analyze_DMRs),
+check(params$run_functional_groups),
+check(params$run_GO_analysis),
+check(params$run_KEGG_pathways),
+check(params$run_TE_metaPlots),
+check(params$run_GeneBody_metaPlots),
+check(params$run_GeneFeatures_metaPlots),
+check(params$analyze_strand_asymmetry_DMRs),
+check(params$analyze_DMVs),
+check(params$analyze_dH)
+))
+```
+
+### QC {.tabset}
+
+**Comparison:** `r params$var2` vs `r params$var1`  
+**Results folder:** `r file.path(root, exp_path)`
+
+#### Conversion rate
+
+When a chloroplast sequence is configured in the reference bundle, its largely unmethylated DNA provides a practical estimate of bisulfite C→T conversion efficiency.
+
+```{r conversion-rate, results='asis'}
+safe_section({
+  conv_path <- file.path(qc_dir_path, "conversion_rate.csv")
+  if (!file.exists(conv_path)) {
+    cat(sprintf("_Missing file:_ `%s`_\n\n", conv_path))
+  } else {
+    conv <- read.csv(conv_path, check.names = FALSE)
+    space_rep <- rep(" ", nrow(conv))
+    conv <- cbind(conv, data.frame(a=space_rep, b=space_rep, c=space_rep, d=space_rep, e=space_rep))
+    colnames(conv) <- c("Sample", "Conversion (%)", "", "", "", "", "")
+    kable(conv, align = c("l", "l"))
+  }
+})
+```
+
+```{r qc-plots-section, results='asis'}
+if (isTRUE(params$run_QC) && dir.exists(qc_dir_path)) { safe_section({
+
+  qc_dist_path <- file.path(qc_dir_path, "distribution")
+  qc_scatter_path <- file.path(qc_dir_path, "scatter")
+  qc_corr_path <- file.path(qc_dir_path, "correlation")
+  qc_var_path <- file.path(qc_dir_path, "variance")
+
+  cat("#### Methylation distributions\n\n")
+  cat("Per-region CG/CHG/CHH methylation distributions for gene bodies, promoters and TEs (control vs treatment).\n\n")
+  if (dir.exists(qc_dist_path)) {
+    dist_files <- list_media_files(qc_dist_path, pattern = "QC_meth_distribution_")
+    if (length(dist_files) > 0) {
+      emit_grid(dist_files, cols = 1, max_height_px = params$plot_max_height_px * 1.5)
+    } else {
+      cat("_No distribution plots found._\n\n")
+    }
+
+    dist_csv <- list.files(qc_dist_path, pattern = "QC_meth_distribution_summary_.*\\.csv$", full.names = TRUE)
+    if (length(dist_csv) > 0) {
+      dist_summary <- read.csv(dist_csv[1], check.names = FALSE)
+      cat("\n")
+      print(kable(dist_summary))
+      cat("\n\n")
+    }
+  }
+
+  cat("#### Sample scatter plots {.tabset}\n\n")
+  cat("Pairwise sample-vs-sample scatter (hexbin) plots on genomic tiles. Pearson r is shown per pair.\n\n")
+  if (dir.exists(qc_scatter_path)) {
+    scatter_files <- list_media_files(qc_scatter_path, pattern = "QC_scatter_")
+    if (length(scatter_files) > 0) {
+      for (cntx_s in c("CG", "CHG", "CHH")) {
+        cntx_scatter <- scatter_files[grepl(paste0("QC_scatter_", cntx_s, "_"), basename(scatter_files))]
+        if (length(cntx_scatter) > 0) {
+          cat(paste0("##### ", cntx_s, "\n\n"))
+          emit_grid(cntx_scatter, cols = 5, max_height_px = params$plot_max_height_px)
+        }
+      }
+    } else {
+      cat("_No scatter plots found._\n\n")
+    }
+  }
+
+  cat("#### Sample correlation\n\n")
+  cat("Pearson correlation heatmap across all replicates per context.\n\n")
+  if (dir.exists(qc_corr_path)) {
+    corr_files <- list_media_files(qc_corr_path, pattern = "QC_correlation_heatmap_")
+    if (length(corr_files) > 0) {
+      emit_grid(order_files(corr_files), cols = 3, max_height_px = params$plot_max_height_px)
+    } else {
+      cat("_No correlation heatmaps found._\n\n")
+    }
+
+    corr_csvs <- list.files(qc_corr_path, pattern = "QC_correlation_matrix_.*\\.csv$", full.names = TRUE)
+    if (length(corr_csvs) > 0) {
+      for (cc in corr_csvs) {
+        cntx_label <- sub(".*QC_correlation_matrix_(CG|CHG|CHH)_.*", "\\1", basename(cc))
+        corr_mat <- read.csv(cc, check.names = FALSE, row.names = 1)
+        cat(paste0("\n**", cntx_label, " correlation matrix**\n\n"))
+        print(kable(round(corr_mat, 4)))
+        cat("\n\n")
+      }
+    }
+  }
+
+  cat("#### Variance / dispersion test\n\n")
+  cat("Per-tile variance comparison between conditions. Tests whether treatment variance is systematically higher than control (paired Wilcoxon).\n\n")
+  if (dir.exists(qc_var_path)) {
+    var_files <- list_media_files(qc_var_path, pattern = "QC_variance_")
+    if (length(var_files) > 0) {
+      emit_grid(var_files, cols = 3, max_height_px = params$plot_max_height_px)
+    } else {
+      cat("_No variance plots found (requires >= 2 replicates per condition)._\n\n")
+    }
+
+    var_csv <- list.files(qc_var_path, pattern = "QC_variance_test_.*\\.csv$", full.names = TRUE)
+    if (length(var_csv) > 0) {
+      var_table <- read.csv(var_csv[1], check.names = FALSE)
+      cat("\n")
+      print(kable(var_table))
+      cat("\n\n")
+    }
+  }
+})}
+```
+
+```{r total-meth-tabs, results='asis'}
+any_total_meth <- isTRUE(params$run_PCA_plot) || isTRUE(params$run_total_meth_plot) ||
+  isTRUE(params$run_CX_Chrplot) || isTRUE(params$run_TEs_distance_n_size) ||
+  isTRUE(params$total_meth_annotation) || isTRUE(params$run_TF_motifs)
+
+if (any_total_meth) { safe_section({
+  cat("### Total methylation {.tabset}\n\n")
+
+if (isTRUE(params$run_PCA_plot)) {
+  cat("#### PCA (Principal Component Analysis)\n\n")
+  cat("PCA compresses genome-wide methylation into a few axes. Replicates should cluster; separation between conditions suggests global methylation shifts.\n\n")
+  emit_dir(PCA_plots_path, recursive = FALSE, cols = 4, max_height_px = params$plot_max_height_px)
+}
+
+if (isTRUE(params$run_total_meth_plot)) {
+  cat("#### Total methylation levels\n\n")
+  cat("Global methylation (%) summarized per context and condition.\n\n")
+  emit_dir(meth_levels_path, recursive = FALSE, cols = 3, max_height_px = params$plot_max_height_px/1.5)
+}
+
+if (isTRUE(params$run_CX_Chrplot)) {
+  cat("#### Chromosome methylation profiles {.tabset}\n\n")
+  cat("Chromosome-scale methylation. Often highlights pericentromeric/heterochromatin-linked changes.\n\n")
+
+  ## Split into context subtabs if possible
+  all_files <- list_media_files(ChrPlot_CX_path, recursive = FALSE)
+  if (length(all_files) == 0) {
+    cat("_No chromosome methylation plots found._\n\n")
+  } else {
+  
+      for (f in all_files) {
+        chrplot_filename <- gsub(paste0(params$var2, "_vs_", params$var1), "", tools::file_path_sans_ext(basename(f)))
+        chrplot_filename <- gsub("_", " ", chrplot_filename)
+        cat("##### ", chrplot_filename, "\n\n", sep="")
+        emit_grid(f, cols = 1, max_height_px = params$plot_max_height_px)
+      }
+  }
+
+  if (dir.exists(ChrPlot_subCX_path)) {
+    sub_files <- list_media_files(ChrPlot_subCX_path, recursive = TRUE)
+    cat("##### subCX {.tabset}\n\n")
+    if (length(sub_files) > 0) {
+      for (f in sub_files) {
+        subchrplot_filename <- gsub("ChrPlot_", "", tools::file_path_sans_ext(basename(f)))
+        subchrplot_filename <- gsub("subCX_", "", subchrplot_filename)
+        subchrplot_filename <- gsub("_", " ", subchrplot_filename)
+        cat("##### ", subchrplot_filename, "\n\n", sep = "")
+        emit_grid(f, cols = 1, max_height_px = params$plot_max_height_px)
+      }
+    }
+  }
+}
+
+if (isTRUE(params$run_TEs_distance_n_size)) {
+  cat("#### TE methylation vs TE size & centromere distance\n\n")
+  emit_dir(TEs_distance_n_size_path, recursive = TRUE, cols = 4, max_height_px = params$plot_max_height_px)
+}
+
+if (isTRUE(params$total_meth_annotation)) {
+  cat("#### Total methylation across genome annotations {.tabset}\n\n")
+  files <- list.files(total_meth_annotation_path, pattern = "\\.csv$", full.names = TRUE, ignore.case = TRUE)
+  if (length(files) == 0) {
+    cat("_No total methylation annotation tables found._\n\n")
+  } else {
+    for (csv in files) {
+      cat("##### ", tools::file_path_sans_ext(basename(csv)), "\n\n", sep = "")
+      tab <- tryCatch(read.csv(csv, nrows = 50, check.names = FALSE), error = function(e) NULL)
+      if (!is.null(tab)) {
+        kable(tab)
+        cat("\n\n")
+      } else {
+        cat("_Could not read table._\n\n")
+      }
+    }
+  }
+}
+
+if (isTRUE(params$run_TF_motifs)) {
+  cat("#### TF motif analysis\n\n")
+  emit_dir(TF_motifs_path, recursive = TRUE, cols = params$default_plot_cols, max_height_px = params$plot_max_height_px)
+}
+})}
+```
+
+```{r metaplot-tes, results='asis'}
+if (isTRUE(params$run_TE_metaPlots) || isTRUE(params$run_GeneBody_metaPlots) || isTRUE(params$run_GeneFeatures_metaPlots)) { safe_section({
+  cat("### MetaPlots {.tabset}\n\n")
+
+  if (isTRUE(params$run_TE_metaPlots)) {
+    cat("#### TEs\n\n")
+    emit_dir(file.path(meta_dir, "TEs"), recursive = FALSE, cols = 4, max_height_px = params$plot_max_height_px)
+  }
+
+  if (isTRUE(params$run_GeneBody_metaPlots)) {
+    cat("#### Genes\n\n")
+    emit_dir(file.path(meta_dir, "Genes"), recursive = FALSE, cols = 4, max_height_px = params$plot_max_height_px)
+  }
+
+  if (isTRUE(params$run_GeneFeatures_metaPlots)) {
+    cat("#### Gene features\n\n")
+    emit_dir(file.path(meta_dir, "Gene_features"), recursive = FALSE, cols = 3, max_height_px = params$plot_max_height_px)
+  }
+})}
+```
+
+```{r dmrs-section, results='asis'}
+if (isTRUE(params$analyze_DMRs)) { safe_section({
+  cat("### DMRs {.tabset}\n\n")
+  cat("#### Settings\n\n")
+
+settings <- data.frame(
+  Setting = c("methyl_files_type","binSize (bp)","minCytosinesCount","minReadsPerCytosine","pValueThreshold","minProportionDiff (CG,CHG,CHH)"),
+  Value = c(val1(params$methyl_files_type), val1(params$binSize), val1(params$minCytosinesCount), val1(params$minReadsPerCytosine),
+            val1(params$pValueThreshold), val1(params$minProportionDiff)),
+  Description = c(
+    "Type of input methylation files (e.g., CX_report).",
+    "Genome tiling window size used to reduce per-site noise.",
+    "Minimum informative cytosines required per bin.",
+    "Per-site coverage filter applied before summarizing bins.",
+    "Statistical cutoff for significance (p-value).",
+    "Minimal ΔmC thresholds for CG, CHG and CHH contexts."
+  ),
+  check.names = FALSE,
+  stringsAsFactors = FALSE
+)
+knitr::kable(settings)
+
+    ## Density
+    dens <- list.files(DMRs_analysis_path, pattern = "DMRs_Density.*\\.(png|svg|jpg|jpeg|tiff)$", full.names = TRUE, ignore.case = TRUE)
+    if (length(dens) > 0) {
+        cat("#### Density\n\n")
+        emit_grid(dens, cols = 1, max_height_px = params$plot_max_height_px)
+    }
+
+    ## Gain/Loss
+    cat("#### Gain/Loss\n\n")
+    gl_files <- list_media_files(gainORloss_path, recursive = TRUE)
+    pie_files <- gl_files[grepl("pie", basename(gl_files), ignore.case = TRUE)]
+    other_files <- setdiff(gl_files, pie_files)
+
+    if (length(other_files) > 0) {
+        emit_grid(other_files, cols = 3, max_height_px = params$plot_max_height_px / 1.85)
+    }
+    if (length(pie_files) > 0) {
+        emit_grid(pie_files, cols = 3, max_height_px = params$plot_max_height_px / 6)
+    }
+
+    ## Chromosome distribution
+    cat("#### Chromosome plots\n\n")
+    emit_dir(ChrPlots_DMRs_path, recursive = TRUE, cols = 1, max_height_px = params$plot_max_height_px / 3)
+
+    ## Genome annotation {.tabset}
+    cat("#### Genome annotation {.tabset}\n\n")
+
+    ## Main genome annotation plots
+    ## Show two main genome annotation images as separate tabs
+    ann_files <- list.files(genome_ann_path, full.names = TRUE)
+    ann_files <- ann_files[file.exists(ann_files) & !file.info(ann_files)$isdir]
+    ann_files <- ann_files[sapply(ann_files, is_media)]
+    ## Identify the two main annotation files by pattern
+    cg_file <- ann_files[grepl("DMRs_genome_annotation", basename(ann_files), ignore.case = TRUE)]
+    te_vs_cg_file <- ann_files[grepl("DMRs_TEs_vs_coding_genes", basename(ann_files), ignore.case = TRUE)]
+    rest_files <- setdiff(ann_files, c(cg_file, te_vs_cg_file))
+    if (length(cg_file) > 0) {
+        cat("##### Coding genes\n\n")
+        emit_grid(cg_file, cols = 1, max_height_px = params$plot_max_height_px)
+    }
+    if (length(te_vs_cg_file) > 0) {
+        cat("##### TEs vs coding genes\n\n")
+        emit_grid(te_vs_cg_file, cols = 1, max_height_px = params$plot_max_height_px / 1.8)
+    }
+    if (length(rest_files) > 0) {
+        for (f in order_files(rest_files)) {
+            cat("##### ", tools::file_path_sans_ext(basename(f)), "\n\n", sep = "")
+            emit_grid(c(f), cols = 1, max_height_px = params$plot_max_height_px)
+        }
+    }
+
+    ## TEs additional results tab
+    te_add_dir <- file.path(genome_ann_path, "TEs_addiotionnal_results")
+    if (dir.exists(te_add_dir)) {
+        cat("##### TEs additional results\n\n")
+        ## List and display the two main images
+        te_imgs <- c("TEs_lines_density_superfamilies", "TEs_direction_density_superfamilies")
+        te_imgs <- unlist(lapply(te_imgs, function(base) {
+            list_media_files(te_add_dir, pattern = paste0("^", base, "\\.(png|svg|jpg|jpeg|tiff)$"), recursive = FALSE)
+        }))
+        if (length(te_imgs) > 0) {
+            emit_grid(te_imgs, cols = 2, max_height_px = params$plot_max_height_px)
+        }
+
+        ## Display the three super-family frequency plots in one tab, three columns
+        sff_dir <- file.path(te_add_dir, "super_family_frequency")
+        sff_imgs <- list.files(sff_dir, pattern = "DMRs_.*\\.(png|svg|jpg|jpeg|tiff)$", full.names = TRUE, ignore.case = TRUE)
+        if (length(dens) > 0) {
+            cat("##### TE super-family frequency\n\n")
+            emit_grid(sff_imgs, cols = 3, max_height_px = params$plot_max_height_px)
+        }
+    }
+
+    ## Functional groups tabset
+    if (isTRUE(params$run_functional_groups)) {
+        fg_dir <- file.path(genome_ann_path, "functional_groups")
+        if (dir.exists(fg_dir)) {
+            cat("##### Functional groups {.tabset}\n\n")
+            fg_files <- list_media_files(fg_dir, recursive = TRUE)
+            if (length(fg_files) == 0) {
+                cat("_No functional group plots found._\n\n")
+            } else {
+                ## Remove *_groups_volcano_ pattern
+                fg_files <- fg_files[!grepl("_groups_volcano_", basename(fg_files), ignore.case = TRUE)]
+                ## Move *_groups_barPlots_ to front and rename to 'summary'
+                bar_idx <- grepl("_groups_barPlots_", basename(fg_files), ignore.case = TRUE)
+                bar_files <- fg_files[bar_idx]
+                rest_files <- fg_files[!bar_idx]
+                ## For bar files, replace pattern with ' summary'
+                bar_files_named <- setNames(
+                    bar_files,
+                    gsub(paste0("_groups_barPlots_", params$var2, "_vs_", params$var1), " summary", tools::file_path_sans_ext(basename(bar_files)), ignore.case = TRUE)
+                )
+                ## Try to group by context keywords in filenames
+                fg_cg <- rest_files[grepl("\\bcg\\b", basename(rest_files), ignore.case = TRUE)]
+                fg_chg <- rest_files[grepl("\\bchg\\b", basename(rest_files), ignore.case = TRUE)]
+                fg_chh <- rest_files[grepl("\\bchh\\b", basename(rest_files), ignore.case = TRUE)]
+                fg_rest <- setdiff(rest_files, c(fg_cg, fg_chg, fg_chh))
+                ## Show summary tab first if present
+                if (length(bar_files_named) > 0) {
+                    for (i in seq_along(bar_files_named)) {
+                        cat("#####", names(bar_files_named)[i], "\n\n")
+                        emit_grid(bar_files_named[i], cols = params$default_plot_cols, max_height_px = params$plot_max_height_px)
+                    }
+                }
+                if (length(fg_cg) > 0) {
+                    cat("###### CG\n\n")
+                    emit_grid(fg_cg, cols = params$default_plot_cols, max_height_px = params$plot_max_height_px)
+                }
+                if (length(fg_chg) > 0) {
+                    cat("###### CHG\n\n")
+                    emit_grid(fg_chg, cols = params$default_plot_cols, max_height_px = params$plot_max_height_px)
+                }
+                if (length(fg_chh) > 0) {
+                    cat("###### CHH\n\n")
+                    emit_grid(fg_chh, cols = params$default_plot_cols, max_height_px = params$plot_max_height_px)
+                }
+                if (length(fg_rest) > 0) {
+                    for (f in order_files(fg_rest)) {
+                        cat("###### ", tools::file_path_sans_ext(basename(f)), "\n\n", sep = "")
+                        emit_grid(c(f), cols = 1, max_height_px = params$plot_max_height_px)
+                    }
+                }
+            }
+        }
+    }
+
+    ## BigWigs
+    if (dir.exists(DMRs_bigWig_path)) {
+        bw <- list.files(DMRs_bigWig_path, pattern = "\\.(bw|bigWig)$", full.names = FALSE, ignore.case = TRUE)
+        if (length(bw) > 0) {
+            cat("#### BigWig tracks\n\n")
+            cat("These tracks can be loaded in IGV.\n\n")
+            cat(paste0("- ", bw, collapse = "\n"), "\n\n")
+        }
+    }
+
+    ## GO / KEGG (plots only)
+    if (isTRUE(params$run_GO_analysis)) {
+        cat("#### GO analysis\n\n")
+        emit_dir(file.path(exp_path, "GO_analysis"), recursive = TRUE, cols = params$default_plot_cols, max_height_px = params$plot_max_height_px)
+    }
+    if (isTRUE(params$run_KEGG_pathways)) {
+        cat("#### KEGG pathways\n\n")
+        emit_dir(file.path(exp_path, "KEGG_pathway"), recursive = TRUE, cols = params$default_plot_cols, max_height_px = params$plot_max_height_px)
+    }
+})}
+```
+
+```{r strand-asymmetry, results='asis'}
+## Helper function to capitalize first letter
+capitalize <- function(x) { paste0(toupper(substring(x, 1, 1)), substring(x, 2)) }
+
+if (isTRUE(params$analyze_strand_asymmetry_DMRs)) {
+  safe_section({
+  cat("### Strand-asymmetry DMRs {.tabset}\n\n")
+
+  for (cntx in c("CG", "CHG", "CHH")) {
+    cat("#### ", cntx, " {.tabset}\n\n", sep = "")
+    for (pat in c("conflicting", "hemi", "symmetric")) {
+      files <- list.files(file.path(strand_asymmetry_path, cntx), pattern = paste0("DMRs_", cntx, "_", pat, ".*\\.csv$"), full.names = TRUE, ignore.case = TRUE)
+      for (file in files) {
+        if (file.exists(file)) {
+          cat(sprintf("##### %s\n\n", capitalize(pat)))
+          tab <- read.csv(file, nrows = 50, check.names = FALSE)
+          kable(tab)
+          cat("\n\n")
+        }
+      }
+    }
+  }
+  })
+}
+```
+
+```{r other, results='asis'}
+if (isTRUE(params$analyze_DMVs) || isTRUE(params$analyze_dH)) {
+  cat("### Other analyses\n\n")
+}
+
+if (isTRUE(params$analyze_DMVs)) { safe_section({
+  cat("#### DMVs (1kb) {.tabset}\n\n")
+  cat("Below are the first 50 rows of each DMV table (if present). Full tables are available in the output directory.\n\n")
+  if (dir.exists(DMV_analysis_path)) {
+    csvs <- list.files(DMV_analysis_path, pattern = "\\.csv$", full.names = TRUE, ignore.case = TRUE)
+    if (length(csvs) > 0) {
+      for (csv in csvs) {
+        cat("##### ", tools::file_path_sans_ext(basename(csv)), "\n\n", sep = "")
+        tab <- tryCatch(read.csv(csv, nrows = 50, check.names = FALSE), error = function(e) NULL)
+        if (!is.null(tab)) {
+          kable(tab)
+          cat("\n\n")
+        } else {
+          cat("_Could not read table._\n\n")
+        }
+      }
+    } else {
+      cat("_No DMV tables found._\n\n")
+    }
+    emit_dir(DMV_analysis_path, recursive = TRUE, cols = params$default_plot_cols)
+  }
+})}
+
+if (isTRUE(params$analyze_dH)) { safe_section({
+  cat("#### ΔH / entropy\n\n")
+  cat("ΔH captures changes in methylation heterogeneity (stochasticity) rather than only mean methylation.\n\n")
+  emit_dir(dH_path, recursive = TRUE, cols = params$default_plot_cols)
+  if (dir.exists(dH_ann_path)) {
+    cat("##### ΔH genome annotation\n\n")
+    emit_dir(dH_ann_path, recursive = TRUE, cols = params$default_plot_cols)
+  }
+})}
+```
+
+### Session {.tabset}
+
+#### Configurations {.tabset}
+
+```{r params-table, results='asis'}
+pnames3 <- names(params)[1:5]
+pnames2 <- names(params)[8:13]
+pnames1 <- names(params)[c(6:7, 14:length(params))]
+
+vals3 <- vapply(pnames3, function(n) val1(params[[n]]), character(1))
+vals2 <- vapply(pnames2, function(n) val1(params[[n]]), character(1))
+vals1 <- vapply(pnames1, function(n) val1(params[[n]]), character(1))
+
+decrip3 <- c(
+  "Maximum plot width (pixels)",
+  "Maximum plot height (pixels)",
+  "Gap between plots in grids (pixels)",
+  "Default columns for multi-plot sections",
+  "If TRUE: copy plots next to the HTML report"
+)
+
+decrip2 <- c(
+  "Path to first sample methylation file",
+  "Path to second sample methylation file",
+  "Path to Methylome.Plants project root",
+  "Genome Annotation file",
+  "Description file",
+  "Transposable Elements file"
+)
+
+decrip1 <- c(
+  "First sample name",
+  "Second sample name",
+  "Minimum proportion difference for CG, CHG, CHH",
+  "DMRs bin size",
+  "Minimum cytosines count",
+  "Minimum reads per cytosine",
+  "P-value (padj) threshold",
+  "Post-alignment file type ('CX_report', 'bedMethyl', 'CGmap')",
+  "Output images format",
+  "Number of cores",
+  "Perform the main DMRs analysis workflow",
+  "Sample-level QC plots (distribution, scatter, correlation, variance)",
+  "Perform PCA for total methylation levels",
+  "Total methylation bar-plot",
+  "Total methylation chromosome plot",
+  "Analyze TEs total methylation by size and distance from centromere",
+  "Total methylation per genic annotations",
+  "Transcription factors motif analysis",
+  "Functional groups genes overlap DMRs",
+  "Perform GO analysis over DMRs",
+  "Perform KEGG pathways analysis over DMRs",
+  "Analyze strand-specific (+/-) DMRs",
+  "Analyze differentially methylated valleys (1kbp)",
+  "Analyze SurpDMRs (delta-H = -(p * log2(p) + (1 - p) * log2(1 - p)))",
+  "Analyze TEs metaPlots",
+  "Analyze Genes-body metaPlots",
+  "Analyze Gene Features metaPlots",
+  "Bin-size for 'Gene_features' metaPlots",
+  "Number of random genes/TEs for metaPlots ('all' for all coding-genes and TEs)"
+)
+cfg3 <- data.frame(Parameter = pnames3, Value = vals3, Description = decrip3, check.names = FALSE, stringsAsFactors = FALSE)
+cfg2 <- data.frame(Parameter = pnames2, Value = vals2, Description = decrip2, check.names = FALSE, stringsAsFactors = FALSE)
+cfg1 <- data.frame(Parameter = pnames1, Value = vals1, Description = decrip1, check.names = FALSE, stringsAsFactors = FALSE)
+
+rownames(cfg3) <- NULL
+rownames(cfg2) <- NULL
+rownames(cfg1) <- NULL
+
+cat("##### Pipeline parameters\n\n")
+kable(cfg1)
+cat("##### Data and annotation files\n\n")
+kable(cfg2)
+cat("##### Report parameters\n\n")
+kable(cfg3)
+```
+
+#### .log file
+
+```{r session-log, results='asis'}
+log_path <- list.files(file.path(exp_path), pattern = paste0(".*\\.log$"), full.names = TRUE, ignore.case = TRUE)[1]
+if (!is.na(log_path) && file.exists(log_path)) {
+  log_lines <- readLines(log_path, warn = FALSE)
+  colorize_log <- function(lines) {
+    # Use Unicode private-use placeholders so regex never touches generated HTML
+    O  <- "\U0091"   # stands for <
+    C  <- "\U0092"   # stands for >
+    wrap <- function(txt, css) paste0(O, "span style='", css, "'", C, txt, O, "/span", C)
+
+    out <- vapply(lines, function(line) {
+      # 1. Escape real HTML entities
+      line <- gsub("&", "&amp;", line, fixed = TRUE)
+      line <- gsub("<", "&lt;",  line, fixed = TRUE)
+      line <- gsub(">", "&gt;",  line, fixed = TRUE)
+
+      # 2. Section dividers (---- ... ----) → dark bold
+      if (grepl("^-{4,}", line)) {
+        return(wrap(line, "color:#555; font-weight:bold;"))
+      }
+
+      # 3. Timestamps inside [] → blue bold
+      line <- gsub("\\[([0-9:]+)\\]",
+                    paste0("[", wrap("\\1", "color:#007acc; font-weight:bold;"), "]"),
+                    line)
+
+      # 4. "Error" / "Warning" keywords
+      line <- gsub("\\bError\\b",   wrap("Error",   "color:#cb0a0a; font-weight:bold;"), line)
+      line <- gsub("\\bWarning\\b", wrap("Warning", "color:#e6a700; font-weight:bold;"), line)
+
+      # 5. Percentages and plain numbers (not inside entities/tags)
+      line <- gsub("(?<![&#;a-zA-Z])\\b([0-9]+\\.?[0-9]*%)\\b",
+                    wrap("\\1", "color:#0b7d3e; font-weight:bold;"), line, perl = TRUE)
+      line <- gsub("(?<![&#;a-zA-Z])\\b([0-9]+\\.?[0-9]*)\\b",
+                    wrap("\\1", "color:#d32f2f;"), line, perl = TRUE)
+
+      # 6. "done" → green
+      line <- gsub("\\bdone\\b", wrap("done", "color:#0b7d3e;"), line)
+
+      line
+    }, character(1))
+
+    # Convert placeholders to real angle brackets at the very end
+    result <- paste(out, collapse = "\n")
+    result <- gsub(O, "<", result, fixed = TRUE)
+    result <- gsub(C, ">", result, fixed = TRUE)
+    result
+  }
+  cat("<div style='max-width:900px; margin:0 auto; background:#f9f9f9; border:1px solid #ddd; border-radius:6px; box-shadow:0 2px 8px #eee;'><pre style='font-size:90%; color:#222; padding:16px; line-height:1.5; overflow-x:auto;'>",
+      colorize_log(log_lines),
+      "</pre></div>", sep = "")
+} else {
+  cat("_No .log file found._\n\n")
+}
+```
+
+#### Session info
+
+```{r session-info, results='asis'}
+si <- capture.output(sessionInfo())
+colorize_si <- function(lines) {
+  O <- "\U0091"; C <- "\U0092"
+  wrap <- function(txt, css) paste0(O, "span style='", css, "'", C, txt, O, "/span", C)
+  out <- vapply(lines, function(line) {
+    line <- gsub("&", "&amp;", line, fixed = TRUE)
+    line <- gsub("<", "&lt;",  line, fixed = TRUE)
+    line <- gsub(">", "&gt;",  line, fixed = TRUE)
+    # Section headers (e.g. "R version ...", "attached base packages:", etc.)
+    if (grepl("^(R version|Platform|Running under|locale|time zone|attached base packages|other attached packages|loaded via a namespace)", line)) {
+      return(wrap(line, "color:#007acc; font-weight:bold;"))
+    }
+    # Package names with version: name_version
+    line <- gsub("\\b([a-zA-Z][a-zA-Z0-9.]*_[0-9][0-9.\\-]*)\\b", wrap("\\1", "color:#555;"), line)
+    line
+  }, character(1))
+  result <- paste(out, collapse = "\n")
+  result <- gsub(O, "<", result, fixed = TRUE)
+  result <- gsub(C, ">", result, fixed = TRUE)
+  result
+}
+cat("<div style='max-width:900px; margin:0 auto; background:#f9f9f9; border:1px solid #ddd; border-radius:6px; box-shadow:0 2px 8px #eee;'><pre style='font-size:90%; color:#222; padding:16px; line-height:1.5; overflow-x:auto;'>",
+    colorize_si(si),
+    "</pre></div>", sep = "")
+```
