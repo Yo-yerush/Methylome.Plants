@@ -2,6 +2,8 @@
 
 Methylome.At is a comprehensive, R-based pipeline for *Arabidopsis thaliana* that processes post-alignment **WGBS** or **Nanopore** sequencing data for CG, CHG and CHH DNA methylation contexts, identifies differentially methylated regions (DMRs, using [DMRcaller](https://github.com/nrzabet/DMRcaller) package) to replicates/single samples data, integrates multiple genomic resources for functional interpretation, and generates extensive visualizations and annotations to advance understanding of plant epigenetic regulation.
 
+Yerushalmy, Y., & Amir, R. (2026). *Methylome.At: A Comprehensive Pipeline for Arabidopsis Whole-Genome Methylome Analysis*, (Version 0.9.0). Zenodo. [doi.org/10.5281/zenodo.21644722](https://doi.org/10.5281/zenodo.21644722)
+
 ---
 
 ```mermaid
