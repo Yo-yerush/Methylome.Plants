@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use this pipeline, please cite it using the metadata below."
-title: "Methylome.At: A Comprehensive Pipeline for Plant Whole-Genome Methylome Analysis"
+title: "Methylome.At: A Comprehensive Pipeline for Arabidopsis Whole-Genome Methylome Analysis"
 type: software
 
 authors:
