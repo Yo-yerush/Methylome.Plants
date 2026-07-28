@@ -93,15 +93,15 @@ qc_tile_methylation <- function(meth_var1_rep, meth_var2_rep,
 #    for coding-gene bodies, promoters, TEs and gbM list
 ###########################################################################
 qc_meth_distribution <- function(meth_var1, meth_var2, annotation.gr, TE_gr,
-                                 var1, var2, Methylome.At_path = ".", minReads = 6) {
+                                 var1, var2, Methylome.Plants_path = ".", minReads = 6) {
 
   Genes_0 <- annotation.gr[annotation.gr$type == "gene"]
   Genes <- Genes_0[grepl("protein_coding", Genes_0$gene_model_type)]
   Promoters <- promoters(Genes, upstream = 2000, downstream = 0, use.names = TRUE)
 
   # load stable/dynamic gbM gene lists (Williams et al. 2023)
-  stable_gbM_file <- file.path(Methylome.At_path, "annotation_files", "At_stable_gbM_Williams23.txt")
-  dynamic_gbM_file <- file.path(Methylome.At_path, "annotation_files", "At_dynamic_gbM_Williams23.txt")
+  stable_gbM_file <- file.path(Methylome.Plants_path, "annotation_files", "At_stable_gbM_Williams23.txt")
+  dynamic_gbM_file <- file.path(Methylome.Plants_path, "annotation_files", "At_dynamic_gbM_Williams23.txt")
 
   features <- list(
     list(name = "Gene body", gr = Genes),
@@ -412,7 +412,7 @@ run_QC_plots <- function(meth_var1, meth_var2,
                          meth_var1_replicates, meth_var2_replicates,
                          var1, var2, var1_path, var2_path,
                          annotation.gr, TE_gr,
-                         Methylome.At_path = ".",
+                         Methylome.Plants_path = ".",
                          tile_width = 1500, minReadsPerTile = 10) {
 
   # create subdirectories
@@ -432,7 +432,7 @@ run_QC_plots <- function(meth_var1, meth_var2,
     {
       setwd(dist_dir)
       qc_meth_distribution(meth_var1, meth_var2, annotation.gr, TE_gr, var1, var2,
-                            Methylome.At_path = Methylome.At_path)
+                            Methylome.Plants_path = Methylome.Plants_path)
       setwd(qc_base)
       message("done")
       cat(" done\n")

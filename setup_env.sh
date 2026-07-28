@@ -40,13 +40,13 @@ eval "$(conda shell.bash hook)"
 #---------------------------------------------------------------------------#
 
 if [ "$CHECK" == "true" ]; then
-    # Activate Methylome.At environment
-    if [ "$CONDA_DEFAULT_ENV" != "Methylome.At_env" ]; then
+    # Activate Methylome.Plants environment
+    if [ "$CONDA_DEFAULT_ENV" != "Methylome.Plants_env" ]; then
         eval "$(conda shell.bash hook)"
-        conda activate Methylome.At_env
-        if [ "$CONDA_DEFAULT_ENV" != "Methylome.At_env" ]; then
-            echo "Error: Failed to activate the 'Methylome.At_env' Conda environment."
-            echo "Please activate it manually using 'conda activate Methylome.At_env' and rerun the script."
+        conda activate Methylome.Plants_env
+        if [ "$CONDA_DEFAULT_ENV" != "Methylome.Plants_env" ]; then
+            echo "Error: Failed to activate the 'Methylome.Plants_env' Conda environment."
+            echo "Please activate it manually using 'conda activate Methylome.Plants_env' and rerun the script."
             exit 1
         fi
     fi
@@ -84,7 +84,7 @@ fi
 
 #---------------------------------------------------------------------------#
 
-# Determine the directory of 'Methylome.At'
+# Determine the directory of 'Methylome.Plants'
 script_dir=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
 cd "$script_dir"
 
@@ -95,7 +95,7 @@ echo "" >> "$log_file"
 
 # Create and activate the conda environment
 echo "Creating Conda environment..." >> "$log_file"
-if conda create --name Methylome.At_env -c conda-forge -c bioconda r-base=4.4.3 "${packages[@]}" -y && conda activate Methylome.At_env; then
+if conda create --name Methylome.Plants_env -c conda-forge -c bioconda r-base=4.4.3 "${packages[@]}" -y && conda activate Methylome.Plants_env; then
     echo "Conda environment created and activated successfully." >> "$log_file"
     echo "Conda environment name: $CONDA_DEFAULT_ENV" >> "$log_file"
 else

@@ -19,7 +19,7 @@ Options:
 -n, --ncores    Number of cores (max). multiples of 4 recommended [default: 8]
 -m, --mem       Buffer size for 'bismark_methylation_extractor' [default: 8G]
 --cx            Produce and keep only '_CX_report.txt.gz' file
---mat           Produce samples table (.txt) for 'Methylome.At' pipeline
+--mat           Produce samples table (.txt) for 'Methylome.Plants' pipeline
 --indx          Keep the genome index directory (applies only if --cx is on)
 --sort          Sort & index BAM files (applies only if --cx is off)
 --strand        Keep top/bottom strand (OT/OB) files [remove in default]
@@ -223,7 +223,7 @@ bismark_genome_preparation $output_path/genome_indx
 
 
 ####################
-### create samples table file for Methylome.At
+### create samples table file for Methylome.Plants
 if [[ "$methAt_samples" == "true" ]]; then
     samples_table_tmp="${output_path}/tmp/S_T_$(date +"%y%m%d%H%M%S").tmp"
     > "$samples_table_tmp"
@@ -317,7 +317,7 @@ for ((u = 0; u < ${#sample_name[@]}; u++)); do
         fi
 
         # # # # # # # # # # # #
-        # samples table for Methylome.At
+        # samples table for Methylome.Plants
         if [[ "$methAt_samples" == "true" ]]; then
             i_unique=$(printf '%s\n' "$i" | sed 's/[._][0-9]*$//')
             if [[ "$keep_cx" == "true" ]]; then
