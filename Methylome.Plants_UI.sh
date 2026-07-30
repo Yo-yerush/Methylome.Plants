@@ -63,6 +63,366 @@ SCRIPT1_DEFAULT_metaPlot_random_genes="10000"
 # Paths to the scripts we want to run (adjust if needed)
 SCRIPT_BIS_PATH="./scripts/run_bismark.sh"
 SCRIPT1_PATH="./scripts/Methylome.Plants.sh"
+REFERENCE_WIZARD_PATH="./scripts/reference_wizard/reference_wizard.R"
+REFERENCE_CACHE_DIR="./reference_bundles/cache"
+REFERENCE_GENERATED_DIR="./reference_bundles/generated"
+R_SCRIPT_BIN="${R_SCRIPT_BIN:-Rscript}"
+
+################################
+# REFERENCE SETUP / WIZARD
+################################
+
+reference_optional_path() {
+  local title="$1"
+  local prompt="$2"
+  local current="$3"
+  whiptail --title "$title" --inputbox "$prompt\n\nLeave empty to skip this resource." \
+    13 86 "$current" 3>&1 1>&2 2>&3
+}
+
+install_orgdb_package() {
+  local package="$1"
+  local log_file
+  log_file=$(mktemp)
+  whiptail --title "Installing OrgDb" --infobox \
+    "Installing $package with BiocManager. This can take several minutes..." 8 76
+  if "$R_SCRIPT_BIN" -e \
+    'pkg <- commandArgs(TRUE)[1]; if (!requireNamespace("BiocManager", quietly=TRUE)) stop("BiocManager is not installed"); BiocManager::install(pkg, ask=FALSE, update=FALSE)' \
+    "$package" >"$log_file" 2>&1; then
+    rm -f "$log_file"
+    return 0
+  fi
+  whiptail --title "OrgDb installation failed" --textbox "$log_file" 24 100
+  rm -f "$log_file"
+  return 1
+}
+
+select_orgdb_source() {
+  WIZARD_ORGDB=""
+  if ! whiptail --title "GO annotation" --yesno \
+    "Configure GO enrichment with a Bioconductor OrgDb package?\n\nYou can instead add a custom gene-to-GO table in the optional-files step." \
+    13 82; then
+    return 0
+  fi
+
+  local search_term list_file error_file
+  search_term=$(whiptail --title "Find an OrgDb" --inputbox \
+    "Search by organism name or package name:" 10 78 "$WIZARD_ORGANISM" \
+    3>&1 1>&2 2>&3) || return 0
+  list_file=$(mktemp)
+  error_file=$(mktemp)
+  mkdir -p "$REFERENCE_CACHE_DIR"
+  whiptail --title "OrgDb discovery" --infobox \
+    "Searching installed and available Bioconductor OrgDb packages..." 8 76
+  "$R_SCRIPT_BIN" "$REFERENCE_WIZARD_PATH" list-orgdb \
+    --query "$search_term" --include-available \
+    --cache "$REFERENCE_CACHE_DIR/orgdb_packages.tsv" \
+    >"$list_file" 2>"$error_file" || true
+
+  local -a choices
+  choices=("none" "Do not use an OrgDb" ON "manual" "Enter an OrgDb package name manually" OFF)
+  declare -A orgdb_status
+  local package description status
+  while IFS=$'\t' read -r package description status; do
+    [ -z "$package" ] && continue
+    choices+=("$package" "$description" OFF)
+    orgdb_status["$package"]="$status"
+  done <"$list_file"
+
+  local selected
+  selected=$(whiptail --title "GO / OrgDb organism" --radiolist \
+    "Select the GO organism database. The wizard will test its gene identifiers against the GTF." \
+    26 104 16 "${choices[@]}" 3>&1 1>&2 2>&3) || selected="none"
+
+  if [ "$selected" = "manual" ]; then
+    selected=$(whiptail --title "OrgDb package" --inputbox \
+      "Enter the package name, for example org.At.tair.db:" 10 78 "" \
+      3>&1 1>&2 2>&3) || selected=""
+  fi
+
+  if [ -n "$selected" ] && [ "$selected" != "none" ]; then
+    if [ "${orgdb_status[$selected]}" = "available" ] || \
+       ! "$R_SCRIPT_BIN" -e 'pkg <- commandArgs(TRUE)[1]; quit(status=if (requireNamespace(pkg, quietly=TRUE)) 0 else 1)' \
+         "$selected" >/dev/null 2>&1; then
+      if whiptail --title "Install OrgDb" --yesno \
+        "$selected is not installed. Install it now with BiocManager?" 10 76; then
+        install_orgdb_package "$selected" || selected=""
+      else
+        selected=""
+      fi
+    fi
+  else
+    selected=""
+  fi
+
+  WIZARD_ORGDB="$selected"
+  rm -f "$list_file" "$error_file"
+}
+
+select_kegg_source() {
+  WIZARD_KEGG=""
+  if ! whiptail --title "KEGG annotation" --yesno \
+    "Configure KEGG pathway analysis for this organism?" 10 72; then
+    return 0
+  fi
+
+  local search_term list_file error_file
+  search_term=$(whiptail --title "Find a KEGG organism" --inputbox \
+    "Search the KEGG organism list by scientific name or code:" \
+    10 82 "$WIZARD_ORGANISM" 3>&1 1>&2 2>&3) || return 0
+  list_file=$(mktemp)
+  error_file=$(mktemp)
+  mkdir -p "$REFERENCE_CACHE_DIR"
+  whiptail --title "KEGG discovery" --infobox \
+    "Retrieving and filtering the KEGG organism list..." 8 72
+  "$R_SCRIPT_BIN" "$REFERENCE_WIZARD_PATH" list-kegg \
+    --query "$search_term" --cache "$REFERENCE_CACHE_DIR/kegg_organisms.tsv" \
+    --limit 100 >"$list_file" 2>"$error_file" || true
+
+  local -a choices
+  choices=("none" "Do not configure KEGG" ON "manual" "Enter a KEGG organism code manually" OFF)
+  local code description
+  while IFS=$'\t' read -r code description; do
+    [ -z "$code" ] && continue
+    choices+=("$code" "$description" OFF)
+  done <"$list_file"
+
+  local selected
+  selected=$(whiptail --title "KEGG organism" --radiolist \
+    "Select the KEGG organism independently from the GO database." \
+    26 100 16 "${choices[@]}" 3>&1 1>&2 2>&3) || selected="none"
+  if [ "$selected" = "manual" ]; then
+    selected=$(whiptail --title "KEGG organism code" --inputbox \
+      "Enter the KEGG code, for example ath, osa, sly, or zma:" \
+      10 76 "" 3>&1 1>&2 2>&3) || selected=""
+  fi
+  [ "$selected" = "none" ] && selected=""
+  WIZARD_KEGG="$selected"
+  rm -f "$list_file" "$error_file"
+}
+
+collect_optional_reference_files() {
+  WIZARD_DESCRIPTIONS=""
+  WIZARD_TE=""
+  WIZARD_STABLE_GBM=""
+  WIZARD_DYNAMIC_GBM=""
+  WIZARD_CENTROMERES=""
+  WIZARD_HETEROCHROMATIN=""
+  WIZARD_TFBS=""
+  WIZARD_GENE_TO_GO=""
+  WIZARD_GENE_SETS=""
+  WIZARD_KEGG_ID_MAP=""
+  WIZARD_ALIASES=""
+
+  local selected
+  selected=$(whiptail --title "Optional reference resources" --checklist \
+    "Select every resource you have. Missing resources simply disable their dependent analyses." \
+    30 106 16 \
+    "descriptions" "Gene-description table" OFF \
+    "te" "TE annotation (BED/GFF3/GTF/CSV/TSV)" OFF \
+    "stable_gbm" "Stable gbM gene-ID list" OFF \
+    "dynamic_gbm" "Dynamic gbM gene-ID list" OFF \
+    "centromeres" "Centromere BED" OFF \
+    "heterochromatin" "Heterochromatin BED" OFF \
+    "tfbs" "Transcription-factor binding sites BED" OFF \
+    "gene_to_go" "Custom gene_id / go_id table" OFF \
+    "gene_sets" "Functional gene sets (TSV or GMT)" OFF \
+    "kegg_id_map" "Custom gene_id / kegg_id table" OFF \
+    "aliases" "Sequence alias / canonical table" OFF \
+    3>&1 1>&2 2>&3) || selected=""
+
+  if [[ "$selected" == *'"descriptions"'* ]]; then
+    WIZARD_DESCRIPTIONS=$(reference_optional_path "Gene descriptions" "Path to the description table" "") || WIZARD_DESCRIPTIONS=""
+  fi
+  if [[ "$selected" == *'"te"'* ]]; then
+    WIZARD_TE=$(reference_optional_path "TE annotation" "Path to the TE annotation" "") || WIZARD_TE=""
+  fi
+  if [[ "$selected" == *'"stable_gbm"'* ]]; then
+    WIZARD_STABLE_GBM=$(reference_optional_path "Stable gbM" "Path to the stable-gbM gene-ID list" "") || WIZARD_STABLE_GBM=""
+  fi
+  if [[ "$selected" == *'"dynamic_gbm"'* ]]; then
+    WIZARD_DYNAMIC_GBM=$(reference_optional_path "Dynamic gbM" "Path to the dynamic-gbM gene-ID list" "") || WIZARD_DYNAMIC_GBM=""
+  fi
+  if [[ "$selected" == *'"centromeres"'* ]]; then
+    WIZARD_CENTROMERES=$(reference_optional_path "Centromeres" "Path to the centromere BED file" "") || WIZARD_CENTROMERES=""
+  fi
+  if [[ "$selected" == *'"heterochromatin"'* ]]; then
+    WIZARD_HETEROCHROMATIN=$(reference_optional_path "Heterochromatin" "Path to the heterochromatin BED file" "") || WIZARD_HETEROCHROMATIN=""
+  fi
+  if [[ "$selected" == *'"tfbs"'* ]]; then
+    WIZARD_TFBS=$(reference_optional_path "TFBS" "Path to the TFBS BED file" "") || WIZARD_TFBS=""
+  fi
+  if [[ "$selected" == *'"gene_to_go"'* ]]; then
+    WIZARD_GENE_TO_GO=$(reference_optional_path "Gene to GO" "Path to the table containing gene_id and go_id" "") || WIZARD_GENE_TO_GO=""
+  fi
+  if [[ "$selected" == *'"gene_sets"'* ]]; then
+    WIZARD_GENE_SETS=$(reference_optional_path "Functional gene sets" "Path to the two-column TSV or GMT file" "") || WIZARD_GENE_SETS=""
+  fi
+  if [[ "$selected" == *'"kegg_id_map"'* ]]; then
+    WIZARD_KEGG_ID_MAP=$(reference_optional_path "KEGG ID mapping" "Path to the table containing gene_id and kegg_id" "") || WIZARD_KEGG_ID_MAP=""
+  fi
+  if [[ "$selected" == *'"aliases"'* ]]; then
+    WIZARD_ALIASES=$(reference_optional_path "Sequence aliases" "Path to the table containing alias and canonical" "") || WIZARD_ALIASES=""
+  fi
+}
+
+run_reference_wizard() {
+  WIZARD_ORGANISM=$(whiptail --title "Plant organism" --inputbox \
+    "Scientific/display name of the plant:" 10 80 "" 3>&1 1>&2 2>&3) || return 1
+  [ -z "$WIZARD_ORGANISM" ] && return 1
+  WIZARD_ASSEMBLY=$(whiptail --title "Genome assembly" --inputbox \
+    "Assembly name or accession. This must match the annotation and methylation alignment:" \
+    11 86 "" 3>&1 1>&2 2>&3) || return 1
+  [ -z "$WIZARD_ASSEMBLY" ] && return 1
+  WIZARD_ANNOTATION=$(whiptail --title "Gene annotation" --inputbox \
+    "Path to the GTF, GFF3, GFF, or normalized CSV annotation:" \
+    10 86 "" 3>&1 1>&2 2>&3) || return 1
+  [ -z "$WIZARD_ANNOTATION" ] && return 1
+
+  select_orgdb_source
+  select_kegg_source
+
+  local default_length_mode="auto"
+  local default_fasta=""
+  if [ -n "${SCRIPT_BIS_genome:-}" ] && [ "$SCRIPT_BIS_genome" != "TAIR10" ]; then
+    default_length_mode="fasta"
+    default_fasta="$SCRIPT_BIS_genome"
+  fi
+  WIZARD_LENGTH_MODE=$(whiptail --title "Chromosome lengths" --radiolist \
+    "Choose the source for exact chromosome lengths. Automatic uses CHRLENGTHS from the selected OrgDb when available." \
+    18 100 5 \
+    "auto" "Automatic: selected OrgDb CHRLENGTHS" $([ "$default_length_mode" = "auto" ] && echo ON || echo OFF) \
+    "fasta" "Reference FASTA or FASTA index (.fai)" $([ "$default_length_mode" = "fasta" ] && echo ON || echo OFF) \
+    "sizes" "Two-column chromosome-size table" OFF \
+    "none" "No exact lengths; use observed analysis ranges" OFF \
+    3>&1 1>&2 2>&3) || WIZARD_LENGTH_MODE="auto"
+  WIZARD_FASTA=""
+  WIZARD_CHROMOSOME_SIZES=""
+  if [ "$WIZARD_LENGTH_MODE" = "fasta" ]; then
+    WIZARD_FASTA=$(whiptail --title "Reference FASTA" --inputbox \
+      "Path to the FASTA or .fai file:" 10 86 "$default_fasta" \
+      3>&1 1>&2 2>&3) || WIZARD_FASTA=""
+  elif [ "$WIZARD_LENGTH_MODE" = "sizes" ]; then
+    WIZARD_CHROMOSOME_SIZES=$(whiptail --title "Chromosome sizes" --inputbox \
+      "Path to a TSV containing seqname and length columns:" 10 86 "" \
+      3>&1 1>&2 2>&3) || WIZARD_CHROMOSOME_SIZES=""
+  fi
+
+  WIZARD_CHLOROPLAST=""
+  WIZARD_MITOCHONDRIAL=""
+  if whiptail --title "Organelle sequences" --yesno \
+    "Configure chloroplast or mitochondrial sequence names for QC and ordering?" 10 78; then
+    WIZARD_CHLOROPLAST=$(reference_optional_path "Chloroplast" "Canonical chloroplast sequence name(s), comma-separated" "") || WIZARD_CHLOROPLAST=""
+    WIZARD_MITOCHONDRIAL=$(reference_optional_path "Mitochondria" "Canonical mitochondrial sequence name(s), comma-separated" "") || WIZARD_MITOCHONDRIAL=""
+  fi
+
+  collect_optional_reference_files
+
+  local organism_slug assembly_slug default_output output_path
+  organism_slug=$(printf '%s' "$WIZARD_ORGANISM" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g; s/__*/_/g; s/^_//; s/_$//')
+  assembly_slug=$(printf '%s' "$WIZARD_ASSEMBLY" | sed 's/[^A-Za-z0-9._-]/_/g')
+  mkdir -p "$REFERENCE_GENERATED_DIR"
+  default_output="$REFERENCE_GENERATED_DIR/${organism_slug}_${assembly_slug}.yaml"
+  output_path=$(whiptail --title "Save generated reference" --inputbox \
+    "The wizard configuration will be saved and can be reused later:" \
+    11 90 "$default_output" 3>&1 1>&2 2>&3) || return 1
+  if [ -f "$output_path" ]; then
+    whiptail --title "Replace generated reference?" --yesno \
+      "$output_path already exists. Replace this generated configuration?" 10 92 || return 1
+  fi
+
+  local -a args
+  args=(generate --organism "$WIZARD_ORGANISM" --assembly "$WIZARD_ASSEMBLY" \
+    --annotation "$WIZARD_ANNOTATION" --output "$output_path")
+  [ -n "$WIZARD_ORGDB" ] && args+=(--orgdb-package "$WIZARD_ORGDB" --orgdb-keytype auto)
+  [ -n "$WIZARD_KEGG" ] && args+=(--kegg-organism "$WIZARD_KEGG")
+  [ -n "$WIZARD_FASTA" ] && args+=(--fasta "$WIZARD_FASTA")
+  [ -n "$WIZARD_CHROMOSOME_SIZES" ] && args+=(--chromosome-sizes "$WIZARD_CHROMOSOME_SIZES")
+  [ "$WIZARD_LENGTH_MODE" = "none" ] && args+=(--disable-orgdb-lengths)
+  [ -n "$WIZARD_DESCRIPTIONS" ] && args+=(--descriptions "$WIZARD_DESCRIPTIONS")
+  [ -n "$WIZARD_TE" ] && args+=(--te "$WIZARD_TE")
+  [ -n "$WIZARD_STABLE_GBM" ] && args+=(--stable-gbm "$WIZARD_STABLE_GBM")
+  [ -n "$WIZARD_DYNAMIC_GBM" ] && args+=(--dynamic-gbm "$WIZARD_DYNAMIC_GBM")
+  [ -n "$WIZARD_CENTROMERES" ] && args+=(--centromeres "$WIZARD_CENTROMERES")
+  [ -n "$WIZARD_HETEROCHROMATIN" ] && args+=(--heterochromatin "$WIZARD_HETEROCHROMATIN")
+  [ -n "$WIZARD_TFBS" ] && args+=(--tfbs "$WIZARD_TFBS")
+  [ -n "$WIZARD_GENE_TO_GO" ] && args+=(--gene-to-go "$WIZARD_GENE_TO_GO")
+  [ -n "$WIZARD_GENE_SETS" ] && args+=(--gene-sets "$WIZARD_GENE_SETS")
+  [ -n "$WIZARD_KEGG_ID_MAP" ] && args+=(--kegg-id-map "$WIZARD_KEGG_ID_MAP")
+  [ -n "$WIZARD_ALIASES" ] && args+=(--seqname-aliases "$WIZARD_ALIASES")
+  [ -n "$WIZARD_CHLOROPLAST" ] && args+=(--chloroplast-seqlevels "$WIZARD_CHLOROPLAST")
+  [ -n "$WIZARD_MITOCHONDRIAL" ] && args+=(--mitochondrial-seqlevels "$WIZARD_MITOCHONDRIAL")
+
+  local summary_file error_file
+  summary_file=$(mktemp)
+  error_file=$(mktemp)
+  whiptail --title "Reference validation" --infobox \
+    "Inspecting annotation fields, identifiers, chromosome names, and optional resources..." 8 86
+  if ! "$R_SCRIPT_BIN" "$REFERENCE_WIZARD_PATH" "${args[@]}" \
+    >"$summary_file" 2>"$error_file"; then
+    whiptail --title "Reference setup failed" --textbox "$error_file" 28 108
+    rm -f "$summary_file" "$error_file"
+    return 1
+  fi
+
+  SCRIPT1_reference_bundle=$(readlink -f "$output_path")
+  SCRIPT1_reference_mode="wizard"
+  SCRIPT1_annotation_file=""
+  SCRIPT1_description_file=""
+  SCRIPT1_TEs_file=""
+  [ -n "$WIZARD_ORGDB$WIZARD_GENE_TO_GO" ] && SCRIPT1_GO_analysis="yes" || SCRIPT1_GO_analysis="no"
+  [ -n "$WIZARD_KEGG" ] && SCRIPT1_KEGG_pathways="yes" || SCRIPT1_KEGG_pathways="no"
+  [ -n "$WIZARD_TE" ] || { SCRIPT1_TEs_distance_n_size="no"; SCRIPT1_TEs_metaplots="no"; }
+  [ -n "$WIZARD_TFBS" ] || SCRIPT1_TF_motifs="no"
+  [ -n "$WIZARD_GENE_SETS" ] || SCRIPT1_func_groups="no"
+
+  local summary_text
+  summary_text=$(sed $'s/\t/: /' "$summary_file")
+  whiptail --title "Reference ready" --msgbox \
+    "$summary_text\n\nThe generated bundle will be saved with the analysis and can be reused." \
+    26 104
+  rm -f "$summary_file" "$error_file"
+}
+
+configure_reference() {
+  local current_mode="${SCRIPT1_reference_mode:-wizard}"
+  local selected
+  selected=$(whiptail --title "Plant reference setup" --radiolist \
+    "The wizard is recommended. YAML bundles remain available for reproducible or advanced setups." \
+    17 96 4 \
+    "wizard" "Create a reference from GTF/GFF and optional files" $([ "$current_mode" = "wizard" ] && echo ON || echo OFF) \
+    "bundle" "Load an existing reference-bundle YAML" $([ "$current_mode" = "bundle" ] && echo ON || echo OFF) \
+    "tair10" "Use the bundled Arabidopsis TAIR10 reference" $([ "$current_mode" = "tair10" ] && echo ON || echo OFF) \
+    3>&1 1>&2 2>&3) || return 1
+
+  case "$selected" in
+    wizard)
+      run_reference_wizard
+      ;;
+    bundle)
+      local bundle_path
+      bundle_path=$(whiptail --title "Existing reference bundle" --inputbox \
+        "Path to the species/assembly YAML bundle:" 10 88 "$SCRIPT1_reference_bundle" \
+        3>&1 1>&2 2>&3) || return 1
+      [ ! -f "$bundle_path" ] && {
+        whiptail --title "Reference bundle" --msgbox "Bundle not found: $bundle_path" 10 88
+        return 1
+      }
+      SCRIPT1_reference_bundle=$(readlink -f "$bundle_path")
+      SCRIPT1_reference_mode="bundle"
+      SCRIPT1_annotation_file=""
+      SCRIPT1_description_file=""
+      SCRIPT1_TEs_file=""
+      ;;
+    tair10)
+      SCRIPT1_reference_bundle=$(readlink -f "$SCRIPT1_DEFAULT_reference_bundle")
+      SCRIPT1_reference_mode="tair10"
+      SCRIPT1_annotation_file=""
+      SCRIPT1_description_file=""
+      SCRIPT1_TEs_file=""
+      ;;
+  esac
+}
 
 ##################
 # WHIPTAIL DIALOGS
@@ -139,7 +499,7 @@ edit_script1_parameters() {
   # Parameters are expected to be set before calling this function
   while true; do
         OPTION=$(whiptail --title "'Methylome.Plants' Parameters" \
-            --menu "Select a parameter to change or proceed with current settings." 40 50 33 \
+            --menu "Select a parameter to change or proceed with current settings." 40 108 33 \
             "Proceed."                "$(fmt '' 'Use current parameters')" \
             "Set off"       "$(fmt '' 'Turn OFF all analyses')" \
             "Min diff (CG)"           "$(fmt "$SCRIPT1_minProportionDiff_CG" 'Min methylation proportion difference to call CG DMRs')" \
@@ -171,10 +531,7 @@ edit_script1_parameters() {
             "Strand-specific DMRs"    "$(fmt "$SCRIPT1_strand_DMRs" 'Analyze strand-specific (+/-) DMRs')" \
             "DMVs analysis"           "$(fmt "$SCRIPT1_DMVs" 'Analyze differentially methylated vallies (1kbp)')" \
             "dH analysis"             "$(fmt "$SCRIPT1_delta_H" 'instead of DMRs worflow (calculated by ratios [p]), analyze SurpDMRs')" \
-            "Annotation file (gtf/gff/csv)"  "$(fmt "$SCRIPT1_annotation_file" '')" \
-            "Gene descriptions (txt/csv)"    "$(fmt "$SCRIPT1_description_file" '')" \
-            "TE annotation file (txt)"       "$(fmt "$SCRIPT1_TEs_file" '')" \
-            "Reference bundle (yaml)"        "$(fmt "$SCRIPT1_reference_bundle" '')" \
+            "Reference setup"          "$(fmt "$SCRIPT1_reference_mode" "$SCRIPT1_reference_bundle")" \
             3>&1 1>&2 2>&3)
 
     # Check if user cancelled
@@ -437,20 +794,8 @@ edit_script1_parameters() {
         fi
         ;;
 
-      "Annotation file (gtf/gff/csv)")
-        SCRIPT1_annotation_file=$(whiptail --inputbox "Path to gene annotation file (leave bundled value for the selected reference bundle)" 10 78 "$SCRIPT1_annotation_file" 3>&1 1>&2 2>&3 || echo "$SCRIPT1_annotation_file")
-        ;;
-
-      "Gene descriptions (txt/csv)")
-        SCRIPT1_description_file=$(whiptail --inputbox "Path to gene-description table" 10 78 "$SCRIPT1_description_file" 3>&1 1>&2 2>&3 || echo "$SCRIPT1_description_file")
-        ;;
-
-      "TE annotation file (txt)")
-        SCRIPT1_TEs_file=$(whiptail --inputbox "Path to TE annotation file" 10 78 "$SCRIPT1_TEs_file" 3>&1 1>&2 2>&3 || echo "$SCRIPT1_TEs_file")
-        ;;
-
-      "Reference bundle (yaml)")
-        SCRIPT1_reference_bundle=$(whiptail --inputbox "Path to species/assembly reference bundle YAML" 10 78 "$SCRIPT1_reference_bundle" 3>&1 1>&2 2>&3 || echo "$SCRIPT1_reference_bundle")
+      "Reference setup")
+        configure_reference
         ;;
 
       *)
@@ -502,6 +847,7 @@ if [[ " ${SELECTED_SCRIPTS[*]} " =~ "Methylome.Plants" ]]; then
     SCRIPT1_description_file="$SCRIPT1_DEFAULT_description_file"
     SCRIPT1_TEs_file="$SCRIPT1_DEFAULT_TEs_file"
     SCRIPT1_reference_bundle="$SCRIPT1_DEFAULT_reference_bundle"
+    SCRIPT1_reference_mode="wizard"
     SCRIPT1_disable_DMRs="$SCRIPT1_DEFAULT_disable_DMRs"
     SCRIPT1_strand_DMRs="$SCRIPT1_DEFAULT_strand_DMRs"
     SCRIPT1_DMVs="$SCRIPT1_DEFAULT_DMVs"
@@ -512,7 +858,10 @@ if [[ " ${SELECTED_SCRIPTS[*]} " =~ "Methylome.Plants" ]]; then
     SCRIPT1_bin_size_features="$SCRIPT1_DEFAULT_bin_size_features"
     SCRIPT1_metaPlot_random_genes="$SCRIPT1_DEFAULT_metaPlot_random_genes"
 
-    # Directly go to the parameters selection menu
+    # Configure the plant reference before selecting dependent analyses.
+    configure_reference || exit 1
+
+    # Continue to the analysis parameter menu.
     edit_script1_parameters || exit 1
 fi
 

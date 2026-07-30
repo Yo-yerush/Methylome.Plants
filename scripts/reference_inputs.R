@@ -177,7 +177,7 @@ read_te_annotation <- function(path = NULL, bundle = NULL) {
     gr <- .rename_metadata_field(gr, field_map[[target]], target)
   }
   if (!"gene_id" %in% names(S4Vectors::mcols(gr))) {
-    candidates <- intersect(c("ID", "Name", "repeat_id"), names(S4Vectors::mcols(gr)))
+    candidates <- intersect(c("ID", "Name", "name", "repeat_id", "te_id"), names(S4Vectors::mcols(gr)))
     if (length(candidates)) gr$gene_id <- as.character(S4Vectors::mcols(gr)[[candidates[1]]])
   }
   if (!"gene_id" %in% names(S4Vectors::mcols(gr))) {

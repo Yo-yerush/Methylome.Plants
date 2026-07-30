@@ -225,11 +225,13 @@ topGO
 KEGGREST
 Rgraphviz
 yaml
-
-`org.At.tair.db` is optional and is needed only when the TAIR10 bundle's GO/KEGG analyses are requested. Other bundles can declare their own organism annotation package.
 GenomicFeatures
 plyranges
+AnnotationDbi
+Biostrings
 ```
+
+`org.At.tair.db` is optional and is needed only when the TAIR10 bundle's GO/KEGG analyses are requested. Other bundles can declare their own organism annotation package; the UI can install a selected package after confirmation.
 
 ---
 
@@ -374,6 +376,18 @@ Bundle configuration is preferred because it keeps these files tied to the corre
 ```bash
 ./Methylome.Plants_UI.sh
 ```
+
+The UI opens a plant-reference setup before the analysis options. Choose one of:
+
+- **Reference wizard** — select an organism, assembly and GTF/GFF3, then add only the optional resources you have.
+- **Existing bundle** — reuse a previously generated or manually maintained YAML bundle.
+- **TAIR10** — use the bundled Arabidopsis reference.
+
+The wizard treats GO and KEGG as independent organism selections. For GO it searches installed and available Bioconductor `OrgDb` packages, offers installation after confirmation, and tests every supported key type against gene IDs from the annotation. For KEGG it retrieves a searchable organism/code list and caches it locally.
+
+Exact chromosome lengths can come from a FASTA, `.fai`, chromosome-size table, or a selected `OrgDb` package that exposes `CHRLENGTHS`. If exact lengths are unavailable, the core pipeline can run with observed genomic ranges and reports that limitation. TE, gbM, descriptions, centromeres, heterochromatin, TFBS, gene-to-GO, gene sets, KEGG ID mappings and sequence aliases are all optional.
+
+Successful wizard configurations are saved under `reference_bundles/generated/` by default and are passed to the pipeline exactly like a manual bundle.
 
 ### Manual mode
 
@@ -579,9 +593,10 @@ After installing the R dependencies, validate the generic bundle and coordinate 
 
 ```bash
 Rscript scripts/test_scripts/reference_bundle_smoke.R
+Rscript scripts/test_scripts/reference_wizard_smoke.R
 ```
 
-The fixture intentionally uses non-`Chr` sequence names and non-TAIR gene/TE columns.
+The fixtures intentionally use non-`Chr` sequence names, GFF3 `ID`/`Parent` ancestry, non-TAIR gene/TE columns, optional missing chromosome lengths, FASTA-index lengths, and an intentionally mismatched assembly-size failure.
 
 ---
 

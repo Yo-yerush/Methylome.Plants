@@ -819,65 +819,81 @@ if (isTRUE(params$analyze_dH)) { safe_section({
 #### Configurations {.tabset}
 
 ```{r params-table, results='asis'}
-pnames3 <- names(params)[1:5]
-pnames2 <- names(params)[8:13]
-pnames1 <- names(params)[c(6:7, 14:length(params))]
-
-vals3 <- vapply(pnames3, function(n) val1(params[[n]]), character(1))
-vals2 <- vapply(pnames2, function(n) val1(params[[n]]), character(1))
-vals1 <- vapply(pnames1, function(n) val1(params[[n]]), character(1))
-
-decrip3 <- c(
-  "Maximum plot width (pixels)",
-  "Maximum plot height (pixels)",
-  "Gap between plots in grids (pixels)",
-  "Default columns for multi-plot sections",
-  "If TRUE: copy plots next to the HTML report"
+data_parameter_names <- intersect(c(
+  'var1_path', 'var2_path', 'Methylome.Plants_path',
+  'annotation_file', 'description_file', 'TEs_file',
+  'reference_bundle_path', 'species_name', 'assembly_name'
+), names(params))
+report_parameter_names <- intersect(c(
+  'plot_max_width_px', 'plot_max_height_px', 'plot_gap_px',
+  'default_plot_cols', 'copy_images_next_to_report'
+), names(params))
+pipeline_parameter_names <- setdiff(
+  names(params), c(data_parameter_names, report_parameter_names)
 )
 
-decrip2 <- c(
-  "Path to first sample methylation file",
-  "Path to second sample methylation file",
-  "Path to Methylome.Plants project root",
-  "Genome Annotation file",
-  "Description file",
-  "Transposable Elements file"
+parameter_descriptions <- c(
+  var1 = 'First sample name',
+  var2 = 'Second sample name',
+  var1_path = 'Path to first sample methylation file',
+  var2_path = 'Path to second sample methylation file',
+  Methylome.Plants_path = 'Path to the Methylome.Plants project root',
+  annotation_file = 'Resolved genome annotation file',
+  description_file = 'Resolved gene-description file',
+  TEs_file = 'Resolved transposable-element annotation file',
+  reference_bundle_path = 'Species/assembly reference-bundle YAML',
+  species_name = 'Reference organism display name',
+  assembly_name = 'Reference genome assembly',
+  minProportionDiff = 'Minimum proportion difference for CG, CHG and CHH',
+  binSize = 'DMR bin size',
+  minCytosinesCount = 'Minimum cytosines per tested bin',
+  minReadsPerCytosine = 'Minimum reads per cytosine',
+  pValueThreshold = 'Adjusted p-value threshold',
+  methyl_files_type = 'Post-alignment input format',
+  img_type = 'Output image format',
+  n.cores = 'Number of CPU cores',
+  analyze_DMRs = 'Perform the main DMR analysis workflow',
+  run_QC = 'Generate sample-level quality-control plots',
+  run_PCA_plot = 'Perform PCA for total methylation levels',
+  run_total_meth_plot = 'Generate total-methylation bar plots',
+  run_CX_Chrplot = 'Generate chromosome-wide methylation plots',
+  run_TEs_distance_n_size = 'Analyze TE methylation by size and centromere distance',
+  total_meth_annotation = 'Analyze methylation over genomic annotations',
+  run_TF_motifs = 'Analyze transcription-factor binding motifs',
+  run_functional_groups = 'Analyze functional gene groups overlapping DMRs',
+  run_GO_analysis = 'Perform GO enrichment analysis',
+  run_KEGG_pathways = 'Perform KEGG pathway analysis',
+  analyze_strand_asymmetry_DMRs = 'Analyze strand-specific DMRs',
+  analyze_DMVs = 'Analyze differentially methylated valleys',
+  analyze_dH = 'Analyze methylation entropy / surprisal changes',
+  run_TE_metaPlots = 'Generate TE metaplots',
+  run_GeneBody_metaPlots = 'Generate gene-body metaplots',
+  run_GeneFeatures_metaPlots = 'Generate gene-feature metaplots',
+  gene_features_binSize = 'Bin size for gene-feature metaplots',
+  metaPlot.random.genes = 'Number of genes or TEs sampled for metaplots',
+  plot_max_width_px = 'Maximum plot width in pixels',
+  plot_max_height_px = 'Maximum plot height in pixels',
+  plot_gap_px = 'Gap between plots in grids, in pixels',
+  default_plot_cols = 'Default number of columns in plot grids',
+  copy_images_next_to_report = 'Copy plot assets next to the HTML report'
 )
 
-decrip1 <- c(
-  "First sample name",
-  "Second sample name",
-  "Minimum proportion difference for CG, CHG, CHH",
-  "DMRs bin size",
-  "Minimum cytosines count",
-  "Minimum reads per cytosine",
-  "P-value (padj) threshold",
-  "Post-alignment file type ('CX_report', 'bedMethyl', 'CGmap')",
-  "Output images format",
-  "Number of cores",
-  "Perform the main DMRs analysis workflow",
-  "Sample-level QC plots (distribution, scatter, correlation, variance)",
-  "Perform PCA for total methylation levels",
-  "Total methylation bar-plot",
-  "Total methylation chromosome plot",
-  "Analyze TEs total methylation by size and distance from centromere",
-  "Total methylation per genic annotations",
-  "Transcription factors motif analysis",
-  "Functional groups genes overlap DMRs",
-  "Perform GO analysis over DMRs",
-  "Perform KEGG pathways analysis over DMRs",
-  "Analyze strand-specific (+/-) DMRs",
-  "Analyze differentially methylated valleys (1kbp)",
-  "Analyze SurpDMRs (delta-H = -(p * log2(p) + (1 - p) * log2(1 - p)))",
-  "Analyze TEs metaPlots",
-  "Analyze Genes-body metaPlots",
-  "Analyze Gene Features metaPlots",
-  "Bin-size for 'Gene_features' metaPlots",
-  "Number of random genes/TEs for metaPlots ('all' for all coding-genes and TEs)"
-)
-cfg3 <- data.frame(Parameter = pnames3, Value = vals3, Description = decrip3, check.names = FALSE, stringsAsFactors = FALSE)
-cfg2 <- data.frame(Parameter = pnames2, Value = vals2, Description = decrip2, check.names = FALSE, stringsAsFactors = FALSE)
-cfg1 <- data.frame(Parameter = pnames1, Value = vals1, Description = decrip1, check.names = FALSE, stringsAsFactors = FALSE)
+configuration_table <- function(parameter_names) {
+  descriptions <- unname(parameter_descriptions[parameter_names])
+  missing <- is.na(descriptions)
+  descriptions[missing] <- gsub('_', ' ', parameter_names[missing], fixed = TRUE)
+  data.frame(
+    Parameter = parameter_names,
+    Value = vapply(parameter_names, function(n) val1(params[[n]]), character(1)),
+    Description = descriptions,
+    check.names = FALSE,
+    stringsAsFactors = FALSE
+  )
+}
+
+cfg1 <- configuration_table(pipeline_parameter_names)
+cfg2 <- configuration_table(data_parameter_names)
+cfg3 <- configuration_table(report_parameter_names)
 
 rownames(cfg3) <- NULL
 rownames(cfg2) <- NULL

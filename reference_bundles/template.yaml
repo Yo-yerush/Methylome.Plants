@@ -8,6 +8,8 @@ species:
 genome:
   # Paths are relative to this YAML file unless absolute.
   fasta: null
+  # Strongly recommended. The UI can generate this from FASTA/FAI or a
+  # compatible OrgDb CHRLENGTHS object. Set null when exact lengths are absent.
   chromosome_sizes: chromosome_sizes.tsv
   seqname_aliases: seqname_aliases.tsv
   primary_seqlevels: []
