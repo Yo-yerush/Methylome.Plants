@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Anaconda packages to install
-packages=("r-curl" "r-rcurl" "zlib" "r-textshaping" "harfbuzz" "fribidi" "freetype" "libpng" "pkg-config" "libxml2" "r-xml" "bioconductor-rsamtools" "r-svglite") # "r-devtools"
+packages=("r-curl" "r-rcurl" "zlib" "r-textshaping" "harfbuzz" "fribidi" "freetype" "libpng" "pkg-config" "libxml2" "r-xml" "bioconductor-rsamtools" "r-svglite" "r-fs") # "r-devtools"
 
 #---------------------------------------------------------------------------#
 
