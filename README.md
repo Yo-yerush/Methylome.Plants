@@ -168,8 +168,8 @@ For each contrast (treatment vs control), the main workflow can generate:
 ### Conda (recommended)
 
 - Linux environment (WSL works)
-- [Conda / Miniconda](https://docs.conda.io/en/latest/miniconda.html) ([download](https://repo.anaconda.com/archive/Anaconda3-2024.10-1-Linux-x86_64.sh)) 
-- [`whiptail`](https://linux.die.net/man/1/whiptail) (for UI tutorial) (UI mode)
+- [Anaconda / Miniconda](https://docs.conda.io/en/latest/miniconda.html) ([download](https://repo.anaconda.com/archive/Anaconda3-2026.07-1-Linux-aarch64.sh)) 
+- [`whiptail`](https://linux.die.net/man/1/whiptail) (UI mode)
 
 ### Local R environment
 
