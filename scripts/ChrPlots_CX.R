@@ -115,7 +115,7 @@ ChrPlots_CX_all <- function(
         )
 
         layout(lay,
-            widths  = c(0.375, chr_length, 0.5),
+            widths  = c(0.8, chr_length, 1.2),
             heights = c(1, 1, 1, 0.25) # last row for Chrs
         )
     } else {
@@ -126,7 +126,7 @@ ChrPlots_CX_all <- function(
         )
 
         layout(lay,
-            widths  = c(0.375, chr_length, 0.5),
+            widths  = c(0.8, chr_length, 1.2),
             heights = c(1, 1, 1, 0.35, 0.30)
         )
     }
@@ -149,7 +149,7 @@ ChrPlots_CX_all <- function(
             y_mid_cntx <- ifelse(cntx == "CG", y_mid_cg, ifelse(cntx == "CHG", y_mid_chg, y_mid_chh))
             y_min_cntx <- ifelse(cntx == "CG", y_min_cg, ifelse(cntx == "CHG", y_min_chg, y_min_chh))
 
-            par(mar = c(0, 4, 0, 0)) # c(1, 4, 2, 0))
+            par(mar = c(0, 2.5, 0, 0))
             plot(NA, NA,
                 xlim = c(0, 1), ylim = c(y_min_cntx, y_max_cntx),
                 axes = FALSE, xlab = "",
@@ -166,7 +166,7 @@ ChrPlots_CX_all <- function(
                 text = y_min_cntx,
                 at = y_min_cntx,
                 adj = ifelse(y_min_cntx == 0, 0.5, 0), #
-                line = 0.65,
+                line = 0.35,
                 col = "gray25",
                 cex = 0.55
             )
@@ -175,7 +175,7 @@ ChrPlots_CX_all <- function(
                 text = y_mid_cntx,
                 at = y_mid_cntx,
                 adj = 0.5, #
-                line = 0.65,
+                line = 0.35,
                 col = "gray25",
                 cex = 0.55
             )
@@ -184,7 +184,7 @@ ChrPlots_CX_all <- function(
                 text = y_max_cntx,
                 at = y_max_cntx,
                 adj = ifelse(y_max_cntx == 0 | y_max_cntx == 1, 0.5, 0.9), #
-                line = 0.65,
+                line = 0.35,
                 col = "gray25",
                 cex = 0.55
             )
@@ -381,6 +381,23 @@ var_sep <- function(a, subCX = F, num_cores) {
 ###################################################################
 
 run_ChrPlots_CX <- function(ctrl_name, trnt_name, ctrl_pool, trnt_pool, TE.gr, num_cores, CX_plot = T, subCX_plot = T) {
+    render_chrplot <- function(filename, width, code) {
+        output_type <- as.character(formals(img_device)$img_type)
+        output_file <- paste0(filename, ".", output_type)
+        original_device <- dev.cur()
+        completed <- FALSE
+        img_device(filename, w = width, h = 4)
+        on.exit({
+            if (dev.cur() != original_device) try(dev.off(), silent = TRUE)
+            if (!completed && file.exists(output_file)) unlink(output_file)
+        }, add = TRUE)
+
+        force(code)
+        dev.off()
+        completed <- TRUE
+        invisible(output_file)
+    }
+
     cat("\n")
     cat(paste0("\rCalculate methylated/unmethylated C's ratio... [", ctrl_name, "]          "))
     ctrl_pool <- as.data.frame(ctrl_pool) %>%
@@ -427,6 +444,8 @@ run_ChrPlots_CX <- function(ctrl_name, trnt_name, ctrl_pool, trnt_pool, TE.gr, n
         pull(max_start)
     max_chr_length <- chr_length / max(chr_length)
     chr_amount <- length(chr_labels)
+    figure_width <- max(8, min(18, 2.5 + 0.9 * sum(max_chr_length)))
+    if (!length(TE.gr)) TE.gr <- NULL
     cat(paste0("\rNormelize chromosome panel size to its length: done!"))
     cat("\n-------------\n")
 
@@ -434,8 +453,7 @@ run_ChrPlots_CX <- function(ctrl_name, trnt_name, ctrl_pool, trnt_pool, TE.gr, n
     ### ChrPlot
     if (CX_plot) {
         cat(paste0("\rChrPlots... [", trnt_name, " & ", ctrl_name, "]"))
-        img_device(paste0("ChrPlot_", trnt_name, "_vs_", ctrl_name), w = 7, h = 4)
-        try({
+        render_chrplot(paste0("ChrPlot_", trnt_name, "_vs_", ctrl_name), figure_width, {
             ChrPlots_CX_all(
                 meth_var_list = list(var_sep(ctrl_pool, F, num_cores), var_sep(trnt_pool, F, num_cores)),
                 y_max_cg = 1,
@@ -458,12 +476,10 @@ run_ChrPlots_CX <- function(ctrl_name, trnt_name, ctrl_pool, trnt_pool, TE.gr, n
                 TE_as_gr = TE.gr
             )
         })
-        dev.off()
 
         # delta
         cat(paste0("\rChrPlots... [delta]            "))
-        img_device(paste0("ChrPlot_difference_", trnt_name, "_vs_", ctrl_name), w = 7, h = 4)
-        try({
+        render_chrplot(paste0("ChrPlot_difference_", trnt_name, "_vs_", ctrl_name), figure_width, {
             ChrPlots_CX_all(
                 meth_var_list = list(var_sep(delta_pool, F, num_cores)),
                 y_max_cg = 0.1,
@@ -486,7 +502,6 @@ run_ChrPlots_CX <- function(ctrl_name, trnt_name, ctrl_pool, trnt_pool, TE.gr, n
                 TE_as_gr = TE.gr
             )
         })
-        dev.off()
         cat(paste0("\rChrPlots:   done!              "))
         cat("\n")
     }
@@ -495,8 +510,7 @@ run_ChrPlots_CX <- function(ctrl_name, trnt_name, ctrl_pool, trnt_pool, TE.gr, n
     if (subCX_plot) {
         # var1
         cat(paste0("\rChrPlots for sub-contexts... [", ctrl_name, "]          "))
-        img_device(paste0("subCX/ChrPlot_subCX_", ctrl_name), w = 7, h = 4)
-        try({
+        render_chrplot(paste0("subCX/ChrPlot_subCX_", ctrl_name), figure_width, {
             ChrPlots_CX_all(
                 meth_var_list = list(var_sep(ctrl_pool, T, num_cores), var_sep(trnt_pool, T, num_cores)),
                 y_max_cg = 1,
@@ -519,12 +533,10 @@ run_ChrPlots_CX <- function(ctrl_name, trnt_name, ctrl_pool, trnt_pool, TE.gr, n
                 TE_as_gr = TE.gr
             )
         })
-        dev.off()
 
         # var2
         cat(paste0("\rChrPlots for sub-contexts... [", trnt_name, "]          "))
-        img_device(paste0("subCX/ChrPlot_subCX_", trnt_name), w = 7, h = 4)
-        try({
+        render_chrplot(paste0("subCX/ChrPlot_subCX_", trnt_name), figure_width, {
             ChrPlots_CX_all(
                 meth_var_list = list(var_sep(trnt_pool, T, num_cores)),
                 y_max_cg = 1,
@@ -547,12 +559,10 @@ run_ChrPlots_CX <- function(ctrl_name, trnt_name, ctrl_pool, trnt_pool, TE.gr, n
                 TE_as_gr = TE.gr
             )
         })
-        dev.off()
 
         # delta
         cat("\rChrPlots for sub-contexts... [delta]          ")
-        img_device(paste0("subCX/ChrPlot_difference_subCX_", trnt_name, "_vs_", ctrl_name), w = 7, h = 4)
-        try({
+        render_chrplot(paste0("subCX/ChrPlot_difference_subCX_", trnt_name, "_vs_", ctrl_name), figure_width, {
             ChrPlots_CX_all(
                 meth_var_list = list(var_sep(delta_pool, T, num_cores)),
                 y_max_cg = 0.1,
@@ -575,7 +585,6 @@ run_ChrPlots_CX <- function(ctrl_name, trnt_name, ctrl_pool, trnt_pool, TE.gr, n
                 TE_as_gr = TE.gr
             )
         })
-        dev.off()
         cat("\rChrPlots for sub-contexts:   done!            ")
     }
     cat("\n")

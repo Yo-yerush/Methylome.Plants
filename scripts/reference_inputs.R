@@ -192,9 +192,65 @@ read_te_annotation <- function(path = NULL, bundle = NULL) {
   gr
 }
 
-read_gene_descriptions <- function(path = NULL, bundle = NULL) {
+.annotation_description_values <- function(metadata, candidates) {
+  result <- rep(NA_character_, nrow(metadata))
+  metadata_names <- tolower(names(metadata))
+
+  for (candidate in candidates) {
+    field_index <- match(tolower(candidate), metadata_names, nomatch = 0L)
+    if (!field_index) next
+    values <- .metadata_first_value(metadata[[field_index]])
+    values <- trimws(gsub("[\r\n\t]+", " ", as.character(values)))
+    values <- vapply(values, utils::URLdecode, character(1), USE.NAMES = FALSE)
+    usable <- is.na(result) & !is.na(values) & nzchar(values) & values != "."
+    result[usable] <- values[usable]
+  }
+  result
+}
+
+.gene_descriptions_from_annotation <- function(annotation) {
+  empty <- data.frame(
+    gene_id = character(),
+    Symbol = character(),
+    Short_description = character(),
+    stringsAsFactors = FALSE
+  )
+  if (is.null(annotation) || !length(annotation)) return(empty)
+
+  metadata <- S4Vectors::mcols(annotation)
+  if (!all(c("gene_id", "type") %in% names(metadata))) return(empty)
+  gene_rows <- grepl("gene$", tolower(as.character(metadata$type)))
+  if (!any(gene_rows)) return(empty)
+
+  gene_metadata <- metadata[gene_rows, , drop = FALSE]
+  descriptions <- data.frame(
+    gene_id = as.character(gene_metadata$gene_id),
+    Symbol = .annotation_description_values(
+      gene_metadata, c("gene_name", "symbol", "Name")
+    ),
+    Short_description = .annotation_description_values(
+      gene_metadata, c("description", "Note", "product", "gene_product")
+    ),
+    stringsAsFactors = FALSE
+  )
+  same_symbol <- !is.na(descriptions$Symbol) & descriptions$Symbol == descriptions$gene_id
+  descriptions$Symbol[same_symbol] <- NA_character_
+  descriptions <- descriptions[
+    !is.na(descriptions$gene_id) & nzchar(descriptions$gene_id),
+    , drop = FALSE
+  ]
+  descriptions <- descriptions[
+    order(is.na(descriptions$Short_description)),
+    , drop = FALSE
+  ]
+  descriptions[!duplicated(descriptions$gene_id), , drop = FALSE]
+}
+
+read_gene_descriptions <- function(path = NULL, bundle = NULL, annotation = NULL) {
   path <- path %||% bundle_get(bundle, "annotation.descriptions")
-  if (is.null(path) || !nzchar(path)) return(data.frame(gene_id = character()))
+  if (is.null(path) || !nzchar(path)) {
+    return(.gene_descriptions_from_annotation(annotation))
+  }
   if (!file.exists(path)) stop("Gene description table does not exist: ", path)
   sep <- if (grepl("\\.csv(\\.gz)?$", path, ignore.case = TRUE)) "," else "\t"
   descriptions <- utils::read.table(

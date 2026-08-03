@@ -28,7 +28,9 @@ read_reference_bundle <- function(path) {
   }
 
   path <- normalizePath(path, winslash = "/", mustWork = TRUE)
-  bundle <- yaml::read_yaml(path)
+  document <- yaml::read_yaml(path)
+  is_resolved_document <- is.list(document$reference_bundle)
+  bundle <- if (is_resolved_document) document$reference_bundle else document
   if (!identical(as.integer(bundle$schema_version), 1L)) {
     stop("Unsupported reference-bundle schema_version in ", path)
   }
@@ -36,8 +38,14 @@ read_reference_bundle <- function(path) {
     stop("Reference bundle must define species.id and species.assembly.")
   }
 
+  source_bundle_dir <- if (is_resolved_document &&
+      !is.null(bundle$bundle_dir) && dir.exists(bundle$bundle_dir)) {
+    normalizePath(bundle$bundle_dir, winslash = "/", mustWork = TRUE)
+  } else {
+    dirname(path)
+  }
   bundle$bundle_path <- path
-  bundle$bundle_dir <- dirname(path)
+  bundle$bundle_dir <- source_bundle_dir
   path_fields <- list(
     c("genome", "fasta"),
     c("genome", "chromosome_sizes"),

@@ -68,6 +68,30 @@ REFERENCE_CACHE_DIR="./reference_bundles/cache"
 REFERENCE_GENERATED_DIR="./reference_bundles/generated"
 R_SCRIPT_BIN="${R_SCRIPT_BIN:-Rscript}"
 
+normalize_ui_path() {
+  local value="$1"
+  local first last
+
+  # Trim pasted whitespace, then remove one matching pair of shell quotes.
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  if [ "${#value}" -ge 2 ]; then
+    first="${value:0:1}"
+    last="${value: -1}"
+    if { [ "$first" = '"' ] && [ "$last" = '"' ]; } ||
+       { [ "$first" = "'" ] && [ "$last" = "'" ]; }; then
+      value="${value:1:${#value}-2}"
+    fi
+  fi
+
+  printf '%s' "$value"
+}
+
+normalize_ui_path_var() {
+  local variable_name="$1"
+  printf -v "$variable_name" '%s' "$(normalize_ui_path "${!variable_name}")"
+}
+
 ################################
 # REFERENCE SETUP / WIZARD
 ################################
@@ -78,6 +102,66 @@ reference_optional_path() {
   local current="$3"
   whiptail --title "$title" --inputbox "$prompt\n\nLeave empty to skip this resource." \
     13 86 "$current" 3>&1 1>&2 2>&3
+}
+
+infer_primary_seqlevels() {
+  local source_path="$1"
+  local source_kind="$2"
+  local values=""
+
+  if [ -n "$source_path" ] && [ -f "$source_path" ]; then
+    case "$source_kind" in
+      fasta)
+        if [[ "$source_path" =~ \.fai$ ]]; then
+          values=$(awk 'BEGIN {ORS=","} {print $1}' "$source_path" | sed 's/,$//')
+        else
+          values=$(grep '^>' "$source_path" | sed 's/^>//; s/[[:space:]].*$//' | paste -sd, -)
+        fi
+        ;;
+      sizes)
+        values=$(awk -F'[\t,]' 'NR == 1 && tolower($1) == "seqname" {next} {print $1}' "$source_path" | paste -sd, -)
+        ;;
+      annotation)
+        values=$(awk -F'[\t,]' '$1 !~ /^#/ && NF > 1 {print $1}' "$source_path" | awk '!seen[$0]++' | paste -sd, -)
+        ;;
+    esac
+  fi
+
+  printf '%s' "$values"
+}
+
+apply_reference_capabilities() {
+  local bundle_path="$1"
+  local capabilities
+
+  capabilities=$("$R_SCRIPT_BIN" -e '
+    args <- commandArgs(TRUE)
+    source(file.path(args[2], "scripts/reference_bundle.R"))
+    bundle <- read_reference_bundle(args[1])
+    caps <- bundle_capabilities(bundle)
+    cat(paste(names(caps)[caps], collapse = ","))
+  ' "$bundle_path" "$Methylome_At_path" 2>/dev/null) || return 1
+
+  reference_has_capability() {
+    [[ ",$capabilities," == *",$1,"* ]]
+  }
+
+  if ! reference_has_capability transposable_elements; then
+    SCRIPT1_TEs_distance_n_size="no"
+    SCRIPT1_TEs_metaplots="no"
+  fi
+  reference_has_capability tfbs || SCRIPT1_TF_motifs="no"
+  reference_has_capability functional_groups || SCRIPT1_func_groups="no"
+  reference_has_capability go || SCRIPT1_GO_analysis="no"
+  reference_has_capability kegg || SCRIPT1_KEGG_pathways="no"
+  if ! reference_has_capability gene_annotation; then
+    SCRIPT1_Genes_metaplots="no"
+    SCRIPT1_Gene_features_metaplots="no"
+  fi
+  if ! reference_has_capability gene_annotation &&
+     ! reference_has_capability transposable_elements; then
+    SCRIPT1_total_meth_ann="no"
+  fi
 }
 
 install_orgdb_package() {
@@ -264,6 +348,14 @@ collect_optional_reference_files() {
   if [[ "$selected" == *'"aliases"'* ]]; then
     WIZARD_ALIASES=$(reference_optional_path "Sequence aliases" "Path to the table containing alias and canonical" "") || WIZARD_ALIASES=""
   fi
+
+  local path_variable
+  for path_variable in \
+    WIZARD_DESCRIPTIONS WIZARD_TE WIZARD_STABLE_GBM WIZARD_DYNAMIC_GBM \
+    WIZARD_CENTROMERES WIZARD_HETEROCHROMATIN WIZARD_TFBS WIZARD_GENE_TO_GO \
+    WIZARD_GENE_SETS WIZARD_KEGG_ID_MAP WIZARD_ALIASES; do
+    normalize_ui_path_var "$path_variable"
+  done
 }
 
 run_reference_wizard() {
@@ -277,6 +369,7 @@ run_reference_wizard() {
   WIZARD_ANNOTATION=$(whiptail --title "Gene annotation" --inputbox \
     "Path to the GTF, GFF3, GFF, or normalized CSV annotation:" \
     10 86 "" 3>&1 1>&2 2>&3) || return 1
+  normalize_ui_path_var WIZARD_ANNOTATION
   [ -z "$WIZARD_ANNOTATION" ] && return 1
 
   select_orgdb_source
@@ -302,11 +395,25 @@ run_reference_wizard() {
     WIZARD_FASTA=$(whiptail --title "Reference FASTA" --inputbox \
       "Path to the FASTA or .fai file:" 10 86 "$default_fasta" \
       3>&1 1>&2 2>&3) || WIZARD_FASTA=""
+    normalize_ui_path_var WIZARD_FASTA
   elif [ "$WIZARD_LENGTH_MODE" = "sizes" ]; then
     WIZARD_CHROMOSOME_SIZES=$(whiptail --title "Chromosome sizes" --inputbox \
       "Path to a TSV containing seqname and length columns:" 10 86 "" \
       3>&1 1>&2 2>&3) || WIZARD_CHROMOSOME_SIZES=""
+    normalize_ui_path_var WIZARD_CHROMOSOME_SIZES
   fi
+
+  local primary_default=""
+  if [ -n "$WIZARD_FASTA" ]; then
+    primary_default=$(infer_primary_seqlevels "$WIZARD_FASTA" "fasta")
+  elif [ -n "$WIZARD_CHROMOSOME_SIZES" ]; then
+    primary_default=$(infer_primary_seqlevels "$WIZARD_CHROMOSOME_SIZES" "sizes")
+  else
+    primary_default=$(infer_primary_seqlevels "$WIZARD_ANNOTATION" "annotation")
+  fi
+  WIZARD_PRIMARY_SEQLEVELS=$(whiptail --title "Primary chromosomes" --inputbox \
+    "Comma-separated primary sequence names to analyze.\n\nThe default is inferred from the length source when possible. Remove unplaced/scaffold sequences such as ChrUn if they are not in the FASTA." \
+    14 100 "$primary_default" 3>&1 1>&2 2>&3) || WIZARD_PRIMARY_SEQLEVELS="$primary_default"
 
   WIZARD_CHLOROPLAST=""
   WIZARD_MITOCHONDRIAL=""
@@ -326,6 +433,7 @@ run_reference_wizard() {
   output_path=$(whiptail --title "Save generated reference" --inputbox \
     "The wizard configuration will be saved and can be reused later:" \
     11 90 "$default_output" 3>&1 1>&2 2>&3) || return 1
+  output_path=$(normalize_ui_path "$output_path")
   if [ -f "$output_path" ]; then
     whiptail --title "Replace generated reference?" --yesno \
       "$output_path already exists. Replace this generated configuration?" 10 92 || return 1
@@ -338,6 +446,7 @@ run_reference_wizard() {
   [ -n "$WIZARD_KEGG" ] && args+=(--kegg-organism "$WIZARD_KEGG")
   [ -n "$WIZARD_FASTA" ] && args+=(--fasta "$WIZARD_FASTA")
   [ -n "$WIZARD_CHROMOSOME_SIZES" ] && args+=(--chromosome-sizes "$WIZARD_CHROMOSOME_SIZES")
+  [ -n "$WIZARD_PRIMARY_SEQLEVELS" ] && args+=(--primary-seqlevels "$WIZARD_PRIMARY_SEQLEVELS")
   [ "$WIZARD_LENGTH_MODE" = "none" ] && args+=(--disable-orgdb-lengths)
   [ -n "$WIZARD_DESCRIPTIONS" ] && args+=(--descriptions "$WIZARD_DESCRIPTIONS")
   [ -n "$WIZARD_TE" ] && args+=(--te "$WIZARD_TE")
@@ -375,6 +484,7 @@ run_reference_wizard() {
   [ -n "$WIZARD_TE" ] || { SCRIPT1_TEs_distance_n_size="no"; SCRIPT1_TEs_metaplots="no"; }
   [ -n "$WIZARD_TFBS" ] || SCRIPT1_TF_motifs="no"
   [ -n "$WIZARD_GENE_SETS" ] || SCRIPT1_func_groups="no"
+  apply_reference_capabilities "$SCRIPT1_reference_bundle" || true
 
   local summary_text
   summary_text=$(sed $'s/\t/: /' "$summary_file")
@@ -404,6 +514,7 @@ configure_reference() {
       bundle_path=$(whiptail --title "Existing reference bundle" --inputbox \
         "Path to the species/assembly YAML bundle:" 10 88 "$SCRIPT1_reference_bundle" \
         3>&1 1>&2 2>&3) || return 1
+      bundle_path=$(normalize_ui_path "$bundle_path")
       [ ! -f "$bundle_path" ] && {
         whiptail --title "Reference bundle" --msgbox "Bundle not found: $bundle_path" 10 88
         return 1
@@ -413,6 +524,11 @@ configure_reference() {
       SCRIPT1_annotation_file=""
       SCRIPT1_description_file=""
       SCRIPT1_TEs_file=""
+      if ! apply_reference_capabilities "$SCRIPT1_reference_bundle"; then
+        whiptail --title "Reference bundle" --msgbox \
+          "Could not inspect capabilities in: $SCRIPT1_reference_bundle" 10 92
+        return 1
+      fi
       ;;
     tair10)
       SCRIPT1_reference_bundle=$(readlink -f "$SCRIPT1_DEFAULT_reference_bundle")
@@ -420,6 +536,7 @@ configure_reference() {
       SCRIPT1_annotation_file=""
       SCRIPT1_description_file=""
       SCRIPT1_TEs_file=""
+      apply_reference_capabilities "$SCRIPT1_reference_bundle" || true
       ;;
   esac
 }
@@ -453,13 +570,16 @@ done
 #############################
 # Prompt for the samples_file
 #############################
-SAMPLES_FILE=$(whiptail --title "samples_file" --inputbox \
+if ! SAMPLES_FILE=$(whiptail --title "samples_file" --inputbox \
   "Enter the path to the samples table file:" \
   10 70 \
   "" \
-  3>&1 1>&2 2>&3)
-SAMPLES_FILE="${SAMPLES_FILE//\"/}"
-if [ $? -ne 0 ] || [ -z "$SAMPLES_FILE" ]; then
+  3>&1 1>&2 2>&3); then
+  echo "samples_file is required. Exiting."
+  exit 1
+fi
+SAMPLES_FILE=$(normalize_ui_path "$SAMPLES_FILE")
+if [ -z "$SAMPLES_FILE" ]; then
   echo "samples_file is required. Exiting."
   exit 1
 fi
@@ -485,6 +605,7 @@ edit_script_bis_parameters() {
       break
     elif [ "$OPTION" = "$SCRIPT_BIS_DEFAULT_genome" ]; then
       SCRIPT_BIS_DEFAULT_genome=$(whiptail --inputbox "Path to reference genome file" 10 70 "$SCRIPT_BIS_DEFAULT_genome" 3>&1 1>&2 2>&3 || echo "$SCRIPT_BIS_DEFAULT_genome")
+      SCRIPT_BIS_DEFAULT_genome=$(normalize_ui_path "$SCRIPT_BIS_DEFAULT_genome")
     elif [ "$OPTION" = "$SCRIPT_BIS_DEFAULT_ncores" ]; then
       SCRIPT_BIS_DEFAULT_ncores=$(whiptail --inputbox "Number of cores" 10 70 "$SCRIPT_BIS_DEFAULT_ncores" 3>&1 1>&2 2>&3 || echo "$SCRIPT_BIS_DEFAULT_ncores")
     fi

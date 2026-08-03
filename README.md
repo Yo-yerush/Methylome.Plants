@@ -1,30 +1,3 @@
-### DONT USE THIS PIPELINE YET
-#### MAJOR BAGS IN HERE, AVAILABLE ONLY FOR ARABIDOPSIS DATA USING:
-#### [https://github.com/Yo-yerush/Methylome.At](https://github.com/Yo-yerush/Methylome.At)
-
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
-
 # Methylome.Plants
 
 Methylome.Plants is a reference-bundle-driven R pipeline for plant **WGBS** and **Nanopore** methylation data. It processes CG, CHG and CHH contexts, identifies differentially methylated regions (DMRs, using [DMRcaller](https://github.com/nrzabet/DMRcaller)), integrates assembly-matched genomic resources, and generates visualizations and annotations. A TAIR10 bundle is included as the default; additional plants are supported by supplying a species/assembly reference bundle.
@@ -452,6 +425,31 @@ MetaPlots analysis arguments:
   --MP_features_bin_size        Bin-size (set only for 'Gene_features' analysis!) [default: 10]
   --metaPlot_random             Number of random genes/TEs for metaPlots. 'all' for all the coding-genes and TEs [default: 10000]
 ```
+
+### Core allocation
+
+`--n_cores` is an upper limit, not a guarantee that every requested core will be
+active. The main DMR workflow creates one independent task for each combination
+of primary chromosome and methylation context (`CG`, `CHG`, and `CHH`). Each
+task uses one DMRcaller core so that increasing `--n_cores` cannot change the
+100-bp bin grid or the resulting DMRs.
+
+The maximum useful core count for the main DMR calling step is therefore:
+
+```text
+3 methylation contexts x number of primary chromosomes
+```
+
+| Reference | Primary chromosomes | Maximum concurrent DMR tasks | Suggested `--n_cores` |
+|---|---:|---:|---:|
+| *Arabidopsis thaliana* TAIR10 | 5 | 15 | 15 |
+| *Oryza sativa* (rice) | 12 | 36 | 36 |
+
+For example, requesting 60 cores for Arabidopsis still runs at most 15 main DMR
+tasks concurrently. Other stages generally have lower limits: chromosome
+sub-context plots can use up to 27 workers, GO/KEGG analyses up to 18 when
+enabled, and functional-group annotation up to 4. The current metaplot
+implementations are vectorized/Rcpp-based and do not use additional workers.
 
 ---
 

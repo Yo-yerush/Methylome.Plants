@@ -49,7 +49,7 @@ if (!exists(".loadMetaPlotsCpp", mode = "function")) {
 
 .loadMetaPlotsCpp()
 
-Genes_metaPlot <- function(methylationPool_var1,methylationPool_var2,var1,var2,annotations_file,n.random,minReadsC,n.cores,is_TE=F) {
+Genes_metaPlot <- function(methylationPool_var1,methylationPool_var2,var1,var2,annotations_file,n.random,minReadsC,is_TE=F) {
 
   if (is_TE) {
     new_path.f = "TEs"
@@ -76,7 +76,7 @@ Genes_metaPlot <- function(methylationPool_var1,methylationPool_var2,var1,var2,a
   cat("\nbin", length(coding.Genes), new_path.f, "body ±2kb in 20bp size and compute average methylation:\n")
   
   # make windowSize ranges with the average value
-  genes_metaPlot_fun <- function(methylationData, ann.obj, group_name, n.cores.f = n.cores) {
+  genes_metaPlot_fun <- function(methylationData, ann.obj, group_name) {
     methylationData <- methylationData[which(methylationData$readsN >= minReadsC)]
     methylationData$Proportion <- methylationData$readsM / methylationData$readsN
 

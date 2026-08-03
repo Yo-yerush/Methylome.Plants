@@ -22,6 +22,8 @@ params:
   reference_bundle_path: null
   species_name: "Plant"
   assembly_name: "custom"
+  has_conversion_rate: false
+  has_transposable_elements: false
 
   minProportionDiff: [0.4, 0.2, 0.1]    # CG, CHG, CHH
   binSize: 100
@@ -295,7 +297,7 @@ This report summarizes the results of the **Methylome.Plants** pipeline for **`r
 
 **Key features of the pipeline:**
 
-- Automated QC and conversion rate estimation
+- Automated QC and conversion rate estimation when an organelle reference is configured
 - Global and per-context methylation profiling
 - Chromosome-scale and annotation-based methylation summaries
 - DMR detection and annotation
@@ -367,12 +369,10 @@ check(params$analyze_dH)
 **Comparison:** `r params$var2` vs `r params$var1`  
 **Results folder:** `r file.path(root, exp_path)`
 
-#### Conversion rate
-
-When a chloroplast sequence is configured in the reference bundle, its largely unmethylated DNA provides a practical estimate of bisulfite C→T conversion efficiency.
-
 ```{r conversion-rate, results='asis'}
-safe_section({
+if (isTRUE(params$run_QC) && isTRUE(params$has_conversion_rate)) safe_section({
+  cat("#### Conversion rate\n\n")
+  cat("The configured chloroplast sequence provides an estimate of bisulfite C→T conversion efficiency.\n\n")
   conv_path <- file.path(qc_dir_path, "conversion_rate.csv")
   if (!file.exists(conv_path)) {
     cat(sprintf("_Missing file:_ `%s`_\n\n", conv_path))
@@ -395,7 +395,8 @@ if (isTRUE(params$run_QC) && dir.exists(qc_dir_path)) { safe_section({
   qc_var_path <- file.path(qc_dir_path, "variance")
 
   cat("#### Methylation distributions\n\n")
-  cat("Per-region CG/CHG/CHH methylation distributions for gene bodies, promoters and TEs (control vs treatment).\n\n")
+  distribution_regions <- if (isTRUE(params$has_transposable_elements)) "gene bodies, promoters and TEs" else "gene bodies and promoters"
+  cat(sprintf("Per-region CG/CHG/CHH methylation distributions for %s (control vs treatment).\n\n", distribution_regions))
   if (dir.exists(qc_dist_path)) {
     dist_files <- list_media_files(qc_dist_path, pattern = "QC_meth_distribution_")
     if (length(dist_files) > 0) {

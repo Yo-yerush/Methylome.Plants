@@ -108,10 +108,13 @@ qc_meth_distribution <- function(meth_var1, meth_var2, annotation.gr, TE_gr,
 
   features <- list(
     list(name = "Gene body", gr = Genes),
-    list(name = "Promoter", gr = Promoters),
-    list(name = "TE", gr = TE_gr)
+    list(name = "Promoter", gr = Promoters)
   )
-  feature_levels <- c("Gene body", "Promoter", "TE")
+  feature_levels <- c("Gene body", "Promoter")
+  if (length(TE_gr)) {
+    features[[length(features) + 1L]] <- list(name = "TE", gr = TE_gr)
+    feature_levels <- c(feature_levels, "TE")
+  }
 
   if (!is.null(stable_gbM_file) && file.exists(stable_gbM_file)) {
     stable_ids <- readLines(stable_gbM_file)
@@ -430,7 +433,8 @@ run_QC_plots <- function(meth_var1, meth_var2,
   }
 
   ##### 1. methylation distribution plots #####
-  cat("\nmethylation distribution (gene body / promoter / TE)...")
+  qc_region_label <- if (length(TE_gr)) "gene body / promoter / TE" else "gene body / promoter"
+  cat("\nmethylation distribution (", qc_region_label, ")...", sep = "")
   message(time_msg(), "QC: methylation distribution plots: ", appendLF = FALSE)
   tryCatch(
     {

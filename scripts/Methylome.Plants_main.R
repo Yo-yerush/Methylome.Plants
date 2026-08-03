@@ -89,19 +89,19 @@ Methylome.Plants_main <- function(var1, # control
 
   annotation.gr <- read_gene_annotation(annotation_file, reference_bundle) %>%
     harmonize_seqlevels(reference_bundle)
-  message(time_msg(), "load annotation file")
+  message(time_msg(), if (length(annotation.gr)) "loaded gene annotation" else "gene annotation: not configured")
   cat("\rload annotations and description files [1/3]")
 
   TE_gr <- read_te_annotation(TEs_file, reference_bundle) %>%
     harmonize_seqlevels(reference_bundle)
-  message(time_msg(), "load Transposable Elements file")
+  message(time_msg(), if (length(TE_gr)) "loaded Transposable Elements annotation" else "Transposable Elements annotation: not configured")
   cat("\rload annotations and description files [2/3]")
 
-  description_df <- read_gene_descriptions(description_file, reference_bundle)
+  description_df <- read_gene_descriptions(description_file, reference_bundle, annotation.gr)
   capabilities['gene_annotation'] <- length(annotation.gr) > 0L
   capabilities['transposable_elements'] <- length(TE_gr) > 0L
   capabilities['descriptions'] <- nrow(description_df) > 0L
-  message(time_msg(), "load description file\n")
+  message(time_msg(), if (nrow(description_df)) "loaded gene descriptions\n" else "gene descriptions: not configured\n")
   cat("\rload annotations and description files [3/3]")
 
   cat("\n\n")
@@ -112,6 +112,10 @@ Methylome.Plants_main <- function(var1, # control
   is_single <- (length(var1_path) == 1 & length(var2_path) == 1) # both genotypes includes 1 sample
   is_Replicates <- (length(var1_path) > 1 & length(var2_path) > 1) # both genotypes includes >1 samples
 
+  comparison_name <- paste0(var2, "_vs_", var1)
+  exp_path <- file.path(Methylome.Plants_path, "results", comparison_name)
+  dir.create(exp_path, recursive = TRUE, showWarnings = FALSE)
+
   var_args <- list(
     list(path = var1_path, name = var1),
     list(path = var2_path, name = var2)
@@ -119,8 +123,7 @@ Methylome.Plants_main <- function(var1, # control
 
   ##### load methylation data ('CX_report' file) #####
   message(time_msg(), "load CX methylation data")
-  tryCatch(
-    {
+  tryCatch({
       # load 'CX_reports'
       n.cores.load <- ifelse(n.cores > 1, 2, 1)
       load_vars <- mclapply(var_args, function(x) {
@@ -156,18 +159,12 @@ Methylome.Plants_main <- function(var1, # control
         )
         message(time_msg(), "load and join single-samples data: successfully")
       }
-    },
-    error = function(cond) {
-      cat("\n*\n load and join CX methylation data:\n", as.character(cond), "*\n")
-      stop("load and join CX methylation data: fail")
-    }
-  )
+  }, error = function(cond) {
+    cat("\n*\n load and join CX methylation data:\n", as.character(cond), "*\n")
+    stop("load and join CX methylation data: fail")
+  })
 
   ###########################################################################
-
-  # new folders path names
-  comparison_name <- paste0(var2, "_vs_", var1)
-  exp_path <- paste0(Methylome.Plants_path, "/results/", comparison_name)
 
   qc_dir_path <- paste0(exp_path, "/QC")
 
@@ -195,6 +192,7 @@ Methylome.Plants_main <- function(var1, # control
   centromere_gr <- read_bundle_regions(reference_bundle, 'centromeres')
   heterochromatin_gr <- read_bundle_regions(reference_bundle, 'heterochromatin')
   chloroplast_seqlevels <- as.character(bundle_get(reference_bundle, 'genome.chloroplast_seqlevels', character()))
+  conversion_rate_available <- FALSE
   gene_sets_file <- bundle_get(reference_bundle, 'functional.gene_sets')
   gene_sets_url <- bundle_get(reference_bundle, 'functional.gene_sets_url')
   promoter_upstream <- as.integer(bundle_get(reference_bundle, 'annotation.promoter_upstream', 2000L))
@@ -227,7 +225,41 @@ Methylome.Plants_main <- function(var1, # control
   yaml::write_yaml(
     list(
       reference_bundle = unclass(reference_bundle),
-      enabled_capabilities = as.list(capabilities)
+      enabled_capabilities = as.list(capabilities),
+      run_configuration = list(
+        samples = list(
+          control = list(name = var1, files = as.character(var1_path)),
+          treatment = list(name = var2, files = as.character(var2_path))
+        ),
+        thresholds = list(
+          min_proportion_difference = stats::setNames(as.list(minProportionDiff), c('CG', 'CHG', 'CHH')),
+          bin_size = binSize,
+          min_cytosines_count = minCytosinesCount,
+          min_reads_per_cytosine = minReadsPerCytosine,
+          p_value_threshold = pValueThreshold
+        ),
+        execution = list(file_type = methyl_files_type, image_type = img_type, cores = n.cores),
+        analyses = list(
+          dmrs = analyze_DMRs,
+          qc = run_QC,
+          pca = run_PCA_plot,
+          total_methylation = run_total_meth_plot,
+          chromosome_methylation = run_CX_Chrplot,
+          te_distance_and_size = run_TEs_distance_n_size,
+          total_methylation_annotations = total_meth_annotation,
+          tf_motifs = run_TF_motifs,
+          functional_groups = run_functional_groups,
+          go = run_GO_analysis,
+          kegg = run_KEGG_pathways,
+          strand_dmrs = analyze_strand_asymmetry_DMRs,
+          dmvs = analyze_DMVs,
+          delta_h = analyze_dH,
+          te_metaplots = run_TE_metaPlots,
+          gene_body_metaplots = run_GeneBody_metaPlots,
+          gene_feature_metaplots = run_GeneFeatures_metaPlots
+        ),
+        metaplots = list(feature_bin_size = gene_features_binSize, random_features = metaPlot.random.genes)
+      )
     ),
     file.path(exp_path, 'reference_bundle_resolved.yaml')
   )
@@ -243,24 +275,33 @@ Methylome.Plants_main <- function(var1, # control
     setwd(qc_dir_path)
   
     ##### calculate conversion rate from configured chloroplast sequences
-    message(time_msg(), "conversion rate (C->T) along the Chloroplast genome:", appendLF = F)
-    cat("\nconversion rate (C->T) along the Chloroplast genome:") # "\n"
-    tryCatch(
-      {
-        message("")
-        conR_var1 <- conversionRate(load_vars[[1]]$methylationDataReplicates, var1, chloroplast_seqlevels, bundle_alias_map(reference_bundle))
-        conR_var2 <- conversionRate(load_vars[[2]]$methylationDataReplicates, var2, chloroplast_seqlevels, bundle_alias_map(reference_bundle))
-        conR_b <- rbind(conR_var1, conR_var2)
-        write.csv(conR_b, paste0(qc_dir_path, "/conversion_rate.csv"), row.names = F)
-        print(kable(conR_b))
-      },
-      error = function(cond) {
-        cat("\n*\n conversion rate:\n", as.character(cond), "*\n")
-        message("fail")
-        cat(" fail\n")
-      }
-    )
-    message("")
+    if (isTRUE(capabilities[['chloroplast']])) {
+      message(time_msg(), "conversion rate (C->T) along the Chloroplast genome:", appendLF = F)
+      cat("\nconversion rate (C->T) along the Chloroplast genome:")
+      tryCatch(
+        {
+          message("")
+          conR_var1 <- conversionRate(meth_var1_replicates, var1, chloroplast_seqlevels, bundle_alias_map(reference_bundle))
+          conR_var2 <- conversionRate(meth_var2_replicates, var2, chloroplast_seqlevels, bundle_alias_map(reference_bundle))
+          conR_b <- rbind(conR_var1, conR_var2)
+          if (nrow(conR_b)) {
+            write.csv(conR_b, paste0(qc_dir_path, "/conversion_rate.csv"), row.names = F)
+            print(kable(conR_b))
+            conversion_rate_available <- TRUE
+          } else {
+            message(time_msg(), "conversion rate: skipped (configured chloroplast sequence is absent from the data)")
+          }
+        },
+        error = function(cond) {
+          cat("\n*\n conversion rate:\n", as.character(cond), "*\n")
+          message("fail")
+          cat(" fail\n")
+        }
+      )
+      message("")
+    } else {
+      message(time_msg(), "conversion rate: skipped (no chloroplast sequence configured)")
+    }
 
     ##### sample-level QC plots #####
     cat("\nsample-level QC plots:")
@@ -284,7 +325,7 @@ Methylome.Plants_main <- function(var1, # control
     setwd(exp_path)
   }
 
-  rm(load_vars)
+  if (exists("load_vars", inherits = FALSE)) rm(load_vars)
 
   ###########################################################################
 
@@ -467,7 +508,7 @@ Methylome.Plants_main <- function(var1, # control
       },
       error = function(cond) {
         cat("\n*\n Transcription factors motifs plot:\n", as.character(cond), "*\n")
-        message("fail")
+        message(time_msg(), "TF motif analysis failed: ", conditionMessage(cond))
       }
     )
   }
@@ -501,35 +542,23 @@ Methylome.Plants_main <- function(var1, # control
     ##### Calling DMRs in Replicates #####
     dir.create(DMRs_analysis_path, showWarnings = F)
     setwd(DMRs_analysis_path)
-    DMRs_results <- mclapply(c("CG", "CHG", "CHH"), function(context) {
-      tryCatch(
-        {
-          DMRs_call <- calling_DMRs(
-            methylationDataReplicates_joints, meth_var1, meth_var2,
-            var1, var2, var1_path, var2_path, comparison_name,
-            context, minProportionDiff, binSize, pValueThreshold,
-            minCytosinesCount, minReadsPerCytosine, ifelse(n.cores > 3, n.cores / 3, 1), is_Replicates
-          )
+    dmr_contexts <- c("CG", "CHG", "CHH")
+    DMRs_results <- calling_DMRs_queue(
+      methylationDataReplicates_joints, meth_var1, meth_var2,
+      var1, var2, var1_path, var2_path, comparison_name,
+      dmr_contexts, minProportionDiff, binSize, pValueThreshold,
+      minCytosinesCount, minReadsPerCytosine, n.cores, is_Replicates
+    )
 
-          # quatiles cutoff for dH analysis
-          if (analyze_dH) {
-            DMRs_call <- proportions_cutoff(DMRs_call, meth_var1_replicates, context, q = 0.99)
-          }
-
-          cat(paste0(time_msg(" "), "statistically significant DMRs (", context, "): ", length(DMRs_call), "\n"))
-          message(time_msg(), paste0("statistically significant DMRs (", context, "): ", length(DMRs_call)))
-          # message(time_msg(), paste0("\tDMRs caller in ", context, " context: done"))
-          return(DMRs_call)
-        },
-        error = function(cond) {
-          cat(paste0("\n*\n Calling DMRs in ", context, " context:\n"), as.character(cond), "*\ncontinue without calling DMRs!\n\n")
-          message(time_msg(), "\tCalling DMRs: fail\n")
-          return(NULL)
-        }
-      )
-    }, mc.cores = ifelse(n.cores >= 3, 3, 1))
-
-    names(DMRs_results) <- c("CG", "CHG", "CHH")
+    for (context in dmr_contexts) {
+      if (analyze_dH) {
+        DMRs_results[[context]] <- proportions_cutoff(
+          DMRs_results[[context]], meth_var1_replicates, context, q = 0.99
+        )
+      }
+      cat(paste0(time_msg(" "), "statistically significant DMRs (", context, "): ", length(DMRs_results[[context]]), "\n"))
+      message(time_msg(), "statistically significant DMRs (", context, "): ", length(DMRs_results[[context]]))
+    }
     cat(paste0(time_msg(" "), "done!\n"))
     message("")
 
@@ -710,7 +739,7 @@ Methylome.Plants_main <- function(var1, # control
         setwd(DMRs_analysis_path)
         cat("\ngenerated DMRs density plot for all contexts: ")
         # setwd(ChrPlots_DMRs_path)
-        DMRs_circular_plot(annotation.gr, TE_gr, comparison_name)
+        DMRs_circular_plot(annotation.gr, TE_gr, comparison_name, reference_bundle = reference_bundle)
         cat("done\n")
         message(time_msg(), "generated DMRs density plot for all contexts: done")
       },
@@ -979,11 +1008,11 @@ Methylome.Plants_main <- function(var1, # control
         cat(paste0("Generating circular density plot for strands asymmetry focus: "))
 
         # Runs circular plot on the newly classified data
-        try(DMRs_circular_plot(annotation.gr, TE_gr, paste0("plus_strand_", comparison_name)))
-        try(DMRs_circular_plot(annotation.gr, TE_gr, paste0("minus_strand_", comparison_name)))
-        try(DMRs_circular_plot(annotation.gr, TE_gr, paste0("symmetric_strand_", comparison_name)))
-        try(DMRs_circular_plot(annotation.gr, TE_gr, paste0("hemi_strand_", comparison_name)))
-        try(DMRs_circular_plot(annotation.gr, TE_gr, paste0("conflicting_strand_", comparison_name)))
+        try(DMRs_circular_plot(annotation.gr, TE_gr, paste0("plus_strand_", comparison_name), reference_bundle = reference_bundle))
+        try(DMRs_circular_plot(annotation.gr, TE_gr, paste0("minus_strand_", comparison_name), reference_bundle = reference_bundle))
+        try(DMRs_circular_plot(annotation.gr, TE_gr, paste0("symmetric_strand_", comparison_name), reference_bundle = reference_bundle))
+        try(DMRs_circular_plot(annotation.gr, TE_gr, paste0("hemi_strand_", comparison_name), reference_bundle = reference_bundle))
+        try(DMRs_circular_plot(annotation.gr, TE_gr, paste0("conflicting_strand_", comparison_name), reference_bundle = reference_bundle))
 
         cat("done\n")
         message(time_msg(), "Circular plot for Strand-Asymmetry Profiling: done")
@@ -1066,7 +1095,7 @@ Methylome.Plants_main <- function(var1, # control
         {
           message(time_msg(), "generate metaPlot from ", metaPlot.random.genes, " protein-coding Genes")
           setwd(metaPlot_path)
-          Genes_metaPlot(meth_var1, meth_var2, var1, var2, annotation.gr, metaPlot.random.genes, minReadsPerCytosine, n.cores, is_TE = F)
+          Genes_metaPlot(meth_var1, meth_var2, var1, var2, annotation.gr, metaPlot.random.genes, minReadsPerCytosine, is_TE = F)
           setwd(metaPlot_path)
           delta_metaplot("Genes", var1, var2)
         },
@@ -1082,7 +1111,7 @@ Methylome.Plants_main <- function(var1, # control
         {
           message(time_msg(), "generate metaPlot from ", metaPlot.random.genes, " Transposable Elements")
           setwd(metaPlot_path)
-          Genes_metaPlot(meth_var1, meth_var2, var1, var2, TE_gr, metaPlot.random.genes, minReadsPerCytosine, n.cores, is_TE = T)
+          Genes_metaPlot(meth_var1, meth_var2, var1, var2, TE_gr, metaPlot.random.genes, minReadsPerCytosine, is_TE = T)
           setwd(metaPlot_path)
           delta_metaplot("TEs", var1, var2)
         },
@@ -1098,7 +1127,7 @@ Methylome.Plants_main <- function(var1, # control
         {
           message(time_msg(), "generate metaPlot from ", metaPlot.random.genes, " protein-coding Gene Features")
           setwd(metaPlot_path)
-          Genes_features_metaPlot(meth_var1, meth_var2, var1, var2, annotation.gr, metaPlot.random.genes, minReadsPerCytosine, gene_features_binSize, n.cores, promoter_upstream)
+          Genes_features_metaPlot(meth_var1, meth_var2, var1, var2, annotation.gr, metaPlot.random.genes, minReadsPerCytosine, gene_features_binSize, promoter_upstream)
           # delta_metaplot("Gene_features", var1, var2, is_geneFeature = TRUE)
         },
         error = function(cond) {
@@ -1130,6 +1159,8 @@ Methylome.Plants_main <- function(var1, # control
             reference_bundle_path = reference_bundle_path,
             species_name = bundle_get(reference_bundle, 'species.display_name', bundle_get(reference_bundle, 'species.id', 'Plant')),
             assembly_name = bundle_get(reference_bundle, 'species.assembly', 'custom'),
+            has_conversion_rate = conversion_rate_available,
+            has_transposable_elements = isTRUE(capabilities[['transposable_elements']]),
             minProportionDiff = minProportionDiff,
             binSize = binSize,
             minCytosinesCount = minCytosinesCount,

@@ -12,7 +12,24 @@ TF_motifs <- function(jointed_gr, context = "all", windowSize = 1e6,
 
     ##################### read TFBS file
     cat("read TFBS file\n")
-    tfbs_data <- fread(tfbs_path, showProgress = F)
+    if (grepl("\\.(gz|bgz)$", tfbs_path, ignore.case = TRUE) &&
+        !requireNamespace("R.utils", quietly = TRUE)) {
+        tfbs_data <- data.table::fread(
+            cmd = paste("gzip -cd --", shQuote(tfbs_path)),
+            header = FALSE,
+            showProgress = FALSE
+        )
+    } else {
+        tfbs_data <- data.table::fread(
+            tfbs_path,
+            header = FALSE,
+            showProgress = FALSE
+        )
+    }
+
+    if (ncol(tfbs_data) != 9L) {
+        stop("TFBS BED file must contain exactly 9 columns; found ", ncol(tfbs_data))
+    }
 
     colnames(tfbs_data) <- c("seqnames", "start", "end", "motif", "phase", "strand", "thickStart", "thickEnd", "itemRgb")
 

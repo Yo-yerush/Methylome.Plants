@@ -49,7 +49,7 @@ if (!exists(".loadMetaPlotsCpp", mode = "function")) {
 
 .loadMetaPlotsCpp()
 
-Genes_features_metaPlot <- function(methylationPool_var1, methylationPool_var2, var1, var2, annotations_file, n.random, minReadsC, binSize, n.cores, promoter_upstream = 2000L) {
+Genes_features_metaPlot <- function(methylationPool_var1, methylationPool_var2, var1, var2, annotations_file, n.random, minReadsC, binSize, promoter_upstream = 2000L) {
   
   new_path.f = "Gene_features"
   dir.create(new_path.f, showWarnings = F)
@@ -95,7 +95,7 @@ Genes_features_metaPlot <- function(methylationPool_var1, methylationPool_var2, 
   cat(paste0("\nbin ", length(regions_list[[1]]), " protein coding gene fetures in ", binSize, "bp size and compute average methylation:\n"))
 
   # Function to process methylation data for each region and context
-  genes_metaPlot_fun <- function(methylationData, regions_list, group_name, n.cores.f = n.cores) {
+  genes_metaPlot_fun <- function(methylationData, regions_list, group_name) {
     methylationData <- methylationData[which(methylationData$readsN >= minReadsC)]
     methylationData$Proportion <- methylationData$readsM / methylationData$readsN
 
@@ -221,8 +221,8 @@ Genes_features_metaPlot <- function(methylationPool_var1, methylationPool_var2, 
   
   ############################################
   # run main loop
-  var1_metaPlot = genes_metaPlot_fun(methylationPool_var1, regions_list, var1, n.cores.f = n.cores)
-  var2_metaPlot = genes_metaPlot_fun(methylationPool_var2, regions_list, var2, n.cores.f = n.cores)
+  var1_metaPlot = genes_metaPlot_fun(methylationPool_var1, regions_list, var1)
+  var2_metaPlot = genes_metaPlot_fun(methylationPool_var2, regions_list, var2)
   
   # Save the data
   dir.create("metaPlot_tables", showWarnings = F)

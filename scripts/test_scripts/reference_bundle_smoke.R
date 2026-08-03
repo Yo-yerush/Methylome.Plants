@@ -72,6 +72,13 @@ gff_genes <- read_gene_annotation(bundle = gff_bundle)
 stopifnot(identical(as.character(gff_genes$gene_id), rep("GENE_A", 4)))
 stopifnot(all(c("ID", "Parent") %in% names(mcols(gff_genes))))
 
+gff_descriptions <- read_gene_descriptions(bundle = gff_bundle, annotation = gff_genes)
+stopifnot(
+  identical(gff_descriptions$gene_id, "GENE_A"),
+  is.na(gff_descriptions$Symbol),
+  identical(gff_descriptions$Short_description, "Synthetic GFF description")
+)
+
 alias_collision <- GRanges(
   seqnames = c("scaffold_01", "linkage_A"),
   ranges = IRanges(c(1, 20), width = 1)
