@@ -27,14 +27,32 @@ DMRs_ann <- function(annotation_vec, DMRsReplicates, context, description_file, 
 
       # edit to merge with 'description_file' (if not TE annotations)
       if (type_name != "Transposable_Elements") {
-        DMRs_annotation_df <- apply(DMRs_annotation_df, 2, as.character)
+        DMRs_annotation_df[] <- lapply(DMRs_annotation_df, as.character)
 
-        # keep the columns from 'DMRsReplicates' and 'gene_id' from
-        col_keep <- c("gene_id", "type", names(as.data.frame(DMRsReplicates)))
-        DMRs_annotation_df <- DMRs_annotation_df[, which(colnames(DMRs_annotation_df) %in% col_keep)]
+        # Keep DMR fields plus the annotation identity used for descriptions.
+        col_keep <- c("gene_id", "type", "gene_model_type", names(as.data.frame(DMRsReplicates)))
+        DMRs_annotation_df <- DMRs_annotation_df[
+          , colnames(DMRs_annotation_df) %in% col_keep,
+          drop = FALSE
+        ]
 
-        # merge with araprot11 and uniprot databases description files
-        DMRs_annotation_df <- merge.data.frame(DMRs_annotation_df, description_file, by = "gene_id", all.x = T)
+        has_gene_id <- "gene_id" %in% names(DMRs_annotation_df)
+        if (!has_gene_id) {
+          warning(
+            type_name, " annotation has no gene_id; description merging was skipped.",
+            call. = FALSE
+          )
+          DMRs_annotation_df$gene_id <- NA_character_
+        }
+
+        can_merge_descriptions <- has_gene_id && is.data.frame(description_file) &&
+          nrow(description_file) > 0L && "gene_id" %in% names(description_file)
+        if (can_merge_descriptions) {
+          DMRs_annotation_df <- merge.data.frame(
+            DMRs_annotation_df, description_file,
+            by = "gene_id", all.x = TRUE
+          )
+        }
       }
 
       ### edit columns positions

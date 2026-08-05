@@ -3,3 +3,4 @@ linkage_A	synthetic	gene	100	500	.	+	.	ID=GENE_A;Name=GENE_A;Note=Synthetic%20GF
 linkage_A	synthetic	mRNA	100	500	.	+	.	ID=TX_A;Parent=GENE_A
 linkage_A	synthetic	exon	100	300	.	+	.	ID=EXON_A1;Parent=TX_A
 linkage_A	synthetic	CDS	120	300	.	+	0	ID=CDS_A1;Parent=TX_A
+linkage_A	synthetic	exon	400	500	.	+	.	ID=EXON_A2;Parent=TX_A

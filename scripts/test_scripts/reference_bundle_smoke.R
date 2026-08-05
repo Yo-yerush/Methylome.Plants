@@ -69,8 +69,17 @@ gff_bundle <- list(annotation = list(
   feature_type_field = "type"
 ))
 gff_genes <- read_gene_annotation(bundle = gff_bundle)
-stopifnot(identical(as.character(gff_genes$gene_id), rep("GENE_A", 4)))
+stopifnot(identical(as.character(gff_genes$gene_id), rep("GENE_A", length(gff_genes))))
 stopifnot(all(c("ID", "Parent") %in% names(mcols(gff_genes))))
+
+gff_features <- prepare_gene_features(gff_genes, promoter_upstream = 100L)
+stopifnot(
+  length(gff_features$Introns) == 1L,
+  start(gff_features$Introns) == 301L,
+  end(gff_features$Introns) == 399L,
+  identical(as.character(gff_features$Introns$transcript_id), "TX_A"),
+  identical(as.character(gff_features$Introns$gene_id), "GENE_A")
+)
 
 gff_descriptions <- read_gene_descriptions(bundle = gff_bundle, annotation = gff_genes)
 stopifnot(

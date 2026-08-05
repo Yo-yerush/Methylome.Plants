@@ -1,7 +1,7 @@
 check_if_installed <- as.logical(commandArgs(trailingOnly = TRUE))
 
 pkg_name <- c("dplyr", "tidyr", "ggplot2", "data.table", "lattice", "PeakSegDisk", "geomtextpath", "parallel", "BiocManager", "RColorBrewer", "circlize", "cowplot", "knitr", "kableExtra", "yaml")
-pkg_biocond <- c("DMRcaller", "rtracklayer", "topGO", "KEGGREST", "Rgraphviz", "GenomicFeatures", "plyranges", "AnnotationDbi", "Biostrings")
+pkg_biocond <- c("DMRcaller", "rtracklayer", "topGO", "KEGGREST", "Rgraphviz", "GenomicFeatures", "txdbmaker", "plyranges", "AnnotationDbi", "Biostrings")
 
 if (!check_if_installed) {
   # Update 'textshaping' version to '0.4.1' if required
