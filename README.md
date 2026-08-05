@@ -4,6 +4,13 @@ Methylome.Plants is a reference-bundle-driven R pipeline for plant **WGBS** and 
 
 ---
 
+**Citation**
+
+If you use Methylome.Plants, please cite:
+
+Yerushalmy, Y., & Amir, R. (2026). *Methylome.Plants: A Comprehensive Pipeline for Plant Whole-Genome Methylome Analysis*, (Version 0.9.1). Zenodo. [doi.org/10.5281/zenodo.21808728](https://doi.org/10.5281/zenodo.21808728)
+
+---
 ```mermaid
 %%{init: {'theme':'redux-dark', 'themeVariables': { 'fontFamily':'Georgia, Times New Roman, serif', 'fontSize':'60px'}, 'flowchart': {'nodeSpacing':15, 'rankSpacing': 15}}}%%
 

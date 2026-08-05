@@ -304,6 +304,10 @@ This report summarizes the results of the **Methylome.Plants** pipeline for **`r
 - Visualization of methylation patterns, PCA, and functional group overlaps
 - Optional analyses: motif enrichment, GO/KEGG, meta-plots, and more
 
+**Software citation:**
+
+Yerushalmy, Y., & Amir, R. (2026). *Methylome.Plants: A Comprehensive Pipeline for Plant Whole-Genome Methylome Analysis*, (Version 0.9.1). Zenodo. [doi.org/10.5281/zenodo.21808728](https://doi.org/10.5281/zenodo.21808728)
+
 ---
 
 #### Analyses checklist

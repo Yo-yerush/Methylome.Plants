@@ -25,12 +25,18 @@ keywords:
   - methylome
   - plants
   - differential methylation
+  - DMRs
+  - metaplots
   - functional enrichment
+  - genome annotation
   - bioinformatics
 
 repository-code: "https://github.com/Yo-yerush/Methylome.Plants"
 
+doi: "10.5281/zenodo.21808728"
+url: "https://doi.org/10.5281/zenodo.21808728"
+
 license: GPL-3.0-only
 
-version: 0.8.0
-date-released: "2026-07-28"
+version: 0.9.1
+date-released: "2026-08-05"
