@@ -49,50 +49,83 @@ if (!exists(".loadMetaPlotsCpp", mode = "function")) {
 
 .loadMetaPlotsCpp()
 
-Genes_features_metaPlot <- function(methylationPool_var1, methylationPool_var2, var1, var2, annotations_file, n.random, minReadsC, binSize, n.cores) {
+Genes_features_metaPlot <- function(methylationPool_var1, methylationPool_var2, var1, var2, annotations_file, n.random, minReadsC, binSize, promoter_upstream = 2000L) {
   
   new_path.f = "Gene_features"
   dir.create(new_path.f, showWarnings = F)
   setwd(new_path.f)
   
-  # Define regions as per your provided code
-  Genes = annotations_file[which(annotations_file$type == "gene" & annotations_file$gene_model_type == "protein_coding")]
-  Promoters = promoters(Genes, upstream=2000, downstream=0, use.names=TRUE)
-  Promoters$type = "promoter"
-  
-  CDS = annotations_file[which(annotations_file$type == "CDS" & annotations_file$gene_model_type == "protein_coding")]
-  fiveUTR = annotations_file[which(annotations_file$type == "five_prime_UTR" & annotations_file$gene_model_type == "protein_coding")]
-  introns = annotations_file[which(annotations_file$type == "intron" & annotations_file$gene_model_type == "protein_coding")]
-  threeUTR = annotations_file[which(annotations_file$type == "three_prime_UTR" & annotations_file$gene_model_type == "protein_coding")]
-  
-  # genes to analyze
-  if (n.random[1] != "all") {
-    if (length(n.random) == 1) {
-    rndm_genes <- function(x) {return(sample(1:length(x), as.numeric(n.random)))} # random genes
-    } else {
-      rndm_genes <- function(x) {return(which(x$gene_id %in% n.random))} # list of TAIRs
-    }
-    
-    Promoters = Promoters[rndm_genes(Promoters)]
-    fiveUTR = fiveUTR[rndm_genes(fiveUTR)]
-    CDS = CDS[rndm_genes(CDS)]
-    introns = introns[rndm_genes(introns)]
-    threeUTR = threeUTR[rndm_genes(threeUTR)]
+  features <- prepare_gene_features(annotations_file, promoter_upstream)
+  genes <- features$Genes
+  gene_metadata <- S4Vectors::mcols(genes)
+  if (!"gene_id" %in% names(gene_metadata)) {
+    stop("Gene-feature metaplots require gene identifiers in the annotation.")
   }
-  
-  regions_list = list("Promoters" = Promoters,
-                      "fiveUTR" = fiveUTR,
-                      "CDS" = CDS,
-                      "introns" = introns,
-                      "threeUTR" = threeUTR)
+
+  has_coding_biotype <- "gene_model_type" %in% names(gene_metadata) &&
+    any(as.character(genes$gene_model_type) == "protein_coding", na.rm = TRUE)
+  if (has_coding_biotype) {
+    genes <- genes[as.character(genes$gene_model_type) == "protein_coding" &
+      !is.na(genes$gene_model_type)]
+  }
+
+  available_gene_ids <- unique(as.character(genes$gene_id))
+  available_gene_ids <- available_gene_ids[!is.na(available_gene_ids) & nzchar(available_gene_ids)]
+  if (!length(available_gene_ids)) {
+    stop("Gene-feature metaplots found no genes with usable identifiers.")
+  }
+
+  use_all <- length(n.random) == 1L && !is.na(n.random[1]) &&
+    tolower(as.character(n.random[1])) == "all"
+  if (use_all) {
+    selected_gene_ids <- available_gene_ids
+  } else if (length(n.random) > 1L) {
+    selected_gene_ids <- intersect(as.character(n.random), available_gene_ids)
+    if (!length(selected_gene_ids)) {
+      stop("None of the requested gene identifiers occur in the annotation.")
+    }
+  } else {
+    requested <- suppressWarnings(as.integer(n.random[1]))
+    if (is.na(requested) || requested < 1L) {
+      stop("The number of genes for feature metaplots must be positive or 'all'.")
+    }
+    sample_size <- min(requested, length(available_gene_ids))
+    if (sample_size < requested) {
+      message(
+        "Requested ", requested, " genes for feature metaplots; using all ",
+        sample_size, " available genes."
+      )
+    }
+    selected_gene_ids <- sample(available_gene_ids, sample_size, replace = FALSE)
+  }
+
+  select_genes <- function(feature, feature_name) {
+    metadata <- S4Vectors::mcols(feature)
+    if (!length(feature)) return(feature)
+    if (!"gene_id" %in% names(metadata)) {
+      warning(feature_name, " has no gene identifiers and will be skipped.", call. = FALSE)
+      return(GenomicRanges::GRanges())
+    }
+    feature[!is.na(feature$gene_id) & as.character(feature$gene_id) %in% selected_gene_ids]
+  }
+
+  regions_list <- list(
+    Promoters = select_genes(features$Promoters, "Promoters"),
+    fiveUTR = select_genes(features$fiveUTRs, "5' UTRs"),
+    CDS = select_genes(features$CDS, "CDSs"),
+    introns = select_genes(features$Introns, "Introns"),
+    threeUTR = select_genes(features$threeUTRs, "3' UTRs")
+  )
   
   region_names = names(regions_list)
   contexts = c("CG", "CHG", "CHH")
   
-  cat(paste0("\nbin ", length(regions_list[[1]]), " protein coding gene fetures in ", binSize, "bp size and compute average methylation:\n"))
+  cat(paste0("\nbin features from ", length(selected_gene_ids),
+             " protein-coding genes in ", binSize,
+             " bins and compute average methylation:\n"))
 
   # Function to process methylation data for each region and context
-  genes_metaPlot_fun <- function(methylationData, regions_list, group_name, n.cores.f = n.cores) {
+  genes_metaPlot_fun <- function(methylationData, regions_list, group_name) {
     methylationData <- methylationData[which(methylationData$readsN >= minReadsC)]
     methylationData$Proportion <- methylationData$readsM / methylationData$readsN
 
@@ -218,8 +251,8 @@ Genes_features_metaPlot <- function(methylationPool_var1, methylationPool_var2, 
   
   ############################################
   # run main loop
-  var1_metaPlot = genes_metaPlot_fun(methylationPool_var1, regions_list, var1, n.cores.f = n.cores)
-  var2_metaPlot = genes_metaPlot_fun(methylationPool_var2, regions_list, var2, n.cores.f = n.cores)
+  var1_metaPlot = genes_metaPlot_fun(methylationPool_var1, regions_list, var1)
+  var2_metaPlot = genes_metaPlot_fun(methylationPool_var2, regions_list, var2)
   
   # Save the data
   dir.create("metaPlot_tables", showWarnings = F)
@@ -249,8 +282,13 @@ Genes_features_metaPlot <- function(methylationPool_var1, methylationPool_var2, 
                    data.frame(pos = 1:pos.end, Proportion = var2_proportions, V = "V2"))
     
     # plot configuration
-    min_value = min(v.cntx$Proportion)
-    max_value = max(v.cntx$Proportion)
+    finite_values <- v.cntx$Proportion[is.finite(v.cntx$Proportion)]
+    if (!length(finite_values)) {
+      message("Skipping ", cntx, " gene-feature metaplot: no finite methylation values.")
+      next
+    }
+    min_value = min(finite_values)
+    max_value = max(finite_values)
     q1_value = min_value+((max_value-min_value)/3)
     q2_value = min_value+((max_value-min_value)/3)+((max_value-min_value)/3)
     #middle_value = round(mean(c(min_value, max_value)), 2)

@@ -49,7 +49,7 @@ if (!exists(".loadMetaPlotsCpp", mode = "function")) {
 
 .loadMetaPlotsCpp()
 
-Genes_metaPlot <- function(methylationPool_var1,methylationPool_var2,var1,var2,annotations_file,n.random,minReadsC,n.cores,is_TE=F) {
+Genes_metaPlot <- function(methylationPool_var1,methylationPool_var2,var1,var2,annotations_file,n.random,minReadsC,is_TE=F) {
 
   if (is_TE) {
     new_path.f = "TEs"
@@ -57,7 +57,8 @@ Genes_metaPlot <- function(methylationPool_var1,methylationPool_var2,var1,var2,a
   } else {
     new_path.f = "Genes"
     coding.Genes.0 <- annotations_file[which(annotations_file$type == "gene")]
-    coding.Genes <- coding.Genes.0[which(coding.Genes.0$gene_model_type == "protein_coding")]
+    coding_mask <- coding.Genes.0$gene_model_type == "protein_coding"
+    coding.Genes <- if (any(coding_mask, na.rm = TRUE)) coding.Genes.0[coding_mask %in% TRUE] else coding.Genes.0
   }
   
   if (n.random[1] != "all") {
@@ -65,7 +66,7 @@ Genes_metaPlot <- function(methylationPool_var1,methylationPool_var2,var1,var2,a
       rndm_genes = sample(1:length(coding.Genes), as.numeric(n.random)) # random genes
       coding.Genes = coding.Genes[rndm_genes]
     } else {
-      coding.Genes = coding.Genes[which(coding.Genes$gene_id %in% n.random)] # list of TAIRs
+      coding.Genes = coding.Genes[which(coding.Genes$gene_id %in% n.random)] # list of gene IDs
     }
   }
   
@@ -75,7 +76,7 @@ Genes_metaPlot <- function(methylationPool_var1,methylationPool_var2,var1,var2,a
   cat("\nbin", length(coding.Genes), new_path.f, "body ±2kb in 20bp size and compute average methylation:\n")
   
   # make windowSize ranges with the average value
-  genes_metaPlot_fun <- function(methylationData, ann.obj, group_name, n.cores.f = n.cores) {
+  genes_metaPlot_fun <- function(methylationData, ann.obj, group_name) {
     methylationData <- methylationData[which(methylationData$readsN >= minReadsC)]
     methylationData$Proportion <- methylationData$readsM / methylationData$readsN
 

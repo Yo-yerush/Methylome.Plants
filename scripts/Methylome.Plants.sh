@@ -8,9 +8,11 @@ Methylome_At_path=$(pwd)
 # Methylome_At_path="$Methylome_At_path/../"
 
 # Default files path
-annotation_file="$Methylome_At_path/annotation_files/At_custom_annotations.csv.gz"
-description_file="$Methylome_At_path/annotation_files/At_custom_description_file.csv.gz"
-TEs_file="$Methylome_At_path/annotation_files/TAIR10_Transposable_Elements.txt"
+annotation_file=""
+description_file=""
+TEs_file=""
+reference_bundle="$Methylome_At_path/reference_bundles/arabidopsis_thaliana_TAIR10.yaml"
+reference_bundle_explicit=false
 
 # Default values for optional arguments
 minProportionDiff_CG=0.4
@@ -57,10 +59,12 @@ usage() {
   echo "  --n_cores                     Number of cores [default: $n_cores]"
   echo "  --image_type                  Output images format [default: '$img_type']"
   echo "  --file_type                   Post-alignment file type - 'CX_report', 'bedMethyl' and 'CGmap' [default: '$methyl_files_type' OR determine automatically]"
-  echo "  --annotation_file             Genome Annotation file [default: Methylome.At annotations file (TAIR10 based)]"
-  echo "  --description_file            Description file [default: Methylome.At description file]"
-  echo "  --TEs_file                    Transposable Elements file [default: TAIR10 'Transposable Elements' annotations]"
-  echo "  --Methylome_At_path           Path to Methylome.At [default: $Methylome_At_path]"
+  echo "  --annotation_file             Override the bundle gene annotation file"
+  echo "  --description_file            Override the bundle description file"
+  echo "  --TEs_file                    Override the bundle Transposable Elements file"
+  echo "  --reference_bundle            Species/assembly reference bundle YAML [default: bundled TAIR10 profile]"
+  echo "  --pipeline_path               Path to Methylome.Plants [default: $Methylome_At_path]"
+  echo "  --Methylome_At_path           Deprecated alias for --pipeline_path"
   echo ""
   echo "DMRs analysis arguments:"
   echo "  --minProportionDiff_CG        Minimum proportion difference for CG [default: $minProportionDiff_CG]"
@@ -128,7 +132,8 @@ while [[ "$#" -gt 0 ]]; do
     --annotation_file) annotation_file="$2"; shift ;;
     --description_file) description_file="$2"; shift ;;
     --TEs_file) TEs_file="$2"; shift ;;
-    --Methylome_At_path) Methylome_At_path="$2"; shift ;;
+    --reference_bundle) reference_bundle="$2"; reference_bundle_explicit=true; shift ;;
+    --pipeline_path | --Methylome_At_path) Methylome_At_path="$2"; shift ;;
     --DMRs_off) DMR_analysis=FALSE ;;
     --QC_off) QC_plots=FALSE ;;
     --strand_DMRs) strand_DMRs=TRUE ;;
@@ -170,17 +175,40 @@ while [[ "$#" -gt 0 ]]; do
   shift
 done
 
+if [[ "$reference_bundle_explicit" == "false" ]]; then
+  reference_bundle="$Methylome_At_path/reference_bundles/arabidopsis_thaliana_TAIR10.yaml"
+fi
+
 # Check for required argument
 if [ -z "$samples_file" ]; then
   echo "Error: --samples_file is a required argument."
   usage
 fi
 
+if [ ! -f "$reference_bundle" ]; then
+  echo "Error: Reference bundle '$reference_bundle' does not exist."
+  exit 1
+fi
+
+for resource_file in "$annotation_file" "$description_file" "$TEs_file"; do
+  if [[ -n "$resource_file" && ! -f "$resource_file" ]]; then
+    echo "Error: Override resource '$resource_file' does not exist."
+    exit 1
+  fi
+done
+
+# Preserve user-supplied relative paths before changing into the pipeline directory.
+samples_file=$(readlink -f "$samples_file")
+reference_bundle=$(readlink -f "$reference_bundle")
+[ -n "$annotation_file" ] && annotation_file=$(readlink -f "$annotation_file")
+[ -n "$description_file" ] && description_file=$(readlink -f "$description_file")
+[ -n "$TEs_file" ] && TEs_file=$(readlink -f "$TEs_file")
+
 # ensure files unix line endings [sed -i 's/\r$//' "$samples_file"]
 dos2unix "$samples_file" 2>/dev/null
-dos2unix "$annotation_file" 2>/dev/null
-dos2unix "$description_file" 2>/dev/null
-dos2unix "$TEs_file" 2>/dev/null
+[ -n "$annotation_file" ] && dos2unix "$annotation_file" 2>/dev/null
+[ -n "$description_file" ] && dos2unix "$description_file" 2>/dev/null
+[ -n "$TEs_file" ] && dos2unix "$TEs_file" 2>/dev/null
 
 # Change to the Methylome_At_path directory
 cd "$Methylome_At_path" || {
@@ -258,7 +286,8 @@ echo "Samples file: $samples_file"
 echo "Annotation file: $annotation_file"
 echo "Description file: $description_file"
 echo "Transposable Elements file: $TEs_file"
-echo "Methylome.At directory path: $Methylome_At_path"
+echo "Reference bundle: $reference_bundle"
+echo "Methylome.Plants directory path: $Methylome_At_path"
 echo ""
 echo "Analyze DMRs workflow: $DMR_analysis"
 echo "Analyze strand-specific DMRs: $strand_DMRs"
@@ -279,7 +308,7 @@ echo "**  $treatment_s VS. $control_s" >> "$log_file"
 echo "" >> "$log_file"
 
 # Call the R script with the arguments
-Rscript ./scripts/Methylome.At_run.R \
+Rscript ./scripts/Methylome.Plants_run.R \
 "$samples_file" \
 "$Methylome_At_path" \
 "$annotation_file" \
@@ -314,6 +343,7 @@ Rscript ./scripts/Methylome.At_run.R \
 "$Gene_features_mp" \
 "$bin_size_features" \
 "$metaPlot_random_genes" \
+"$reference_bundle" \
     2>> "$log_file"
 
 # Output again the configurations, now to the 'log' file
@@ -355,4 +385,5 @@ echo "Samples file: $samples_file" >> "$log_file"
 echo "Annotation file: $annotation_file" >> "$log_file"
 echo "Description file: $description_file" >> "$log_file"
 echo "Transposable Elements file: $TEs_file" >> "$log_file"
+echo "Reference bundle: $reference_bundle" >> "$log_file"
 echo "Methylome_At_path: $Methylome_At_path" >> "$log_file"

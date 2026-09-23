@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use this pipeline, please cite it using the metadata below."
-title: "Methylome.At: A Comprehensive Pipeline for Arabidopsis Whole-Genome Methylome Analysis"
+title: "Methylome.Plants: A Comprehensive Pipeline for Plant Whole-Genome Methylome Analysis"
 type: software
 
 authors:
@@ -8,11 +8,14 @@ authors:
     given-names: Yonatan
     orcid: "https://orcid.org/0009-0005-2671-2457"
 
+  - family-names: Hacham
+    given-names: Yael
+
   - family-names: Amir
     given-names: Rachel
 
 abstract: >-
-  Methylome.At is an R- and shell-based pipeline for downstream analysis
+  Methylome.Plants is an R- and shell-based pipeline for downstream analysis
   of plant whole-genome DNA methylation data. It supports WGBS, Nanopore
   bedMethyl, and CGmap inputs and integrates methylation quality control,
   differential methylation analysis, genomic and transposable-element
@@ -20,14 +23,20 @@ abstract: >-
 
 keywords:
   - methylome
-  - arabidopsis
+  - plants
   - differential methylation
+  - DMRs
+  - metaplots
   - functional enrichment
+  - genome annotation
   - bioinformatics
 
-repository-code: "https://github.com/Yo-yerush/Methylome.At"
+repository-code: "https://github.com/Yo-yerush/Methylome.Plants"
+
+doi: "10.5281/zenodo.21808728"
+url: "https://doi.org/10.5281/zenodo.21808728"
 
 license: GPL-3.0-only
 
-version: 0.9.0
-date-released: "2026-07-28"
+version: 0.9.1
+date-released: "2026-08-05"

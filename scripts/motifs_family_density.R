@@ -1,4 +1,7 @@
-TF_motifs <- function(jointed_gr, context = "all", windowSize = 1e6, DMP_fdr = 0.05, ann.gr, tfbs_path = "https://github.com/Yo-yerush/Methylome.At/raw/refs/heads/main/annotation_files/TAIR10_compressed_TFBSs.bed.gz") {
+TF_motifs <- function(jointed_gr, context = "all", windowSize = 1e6,
+                      DMP_fdr = 0.05, ann.gr, tfbs_path,
+                      centromeres = GRanges(), heterochromatin = GRanges(),
+                      reference_bundle = NULL) {
     if (context != "all") {
         jointed_gr <- jointed_gr[which(jointed_gr$context == context)]
         out_file_name <- paste0(context, "_TFs_superfamilies_DMPs_density")
@@ -9,7 +12,24 @@ TF_motifs <- function(jointed_gr, context = "all", windowSize = 1e6, DMP_fdr = 0
 
     ##################### read TFBS file
     cat("read TFBS file\n")
-    tfbs_data <- fread(tfbs_path, showProgress = F)
+    if (grepl("\\.(gz|bgz)$", tfbs_path, ignore.case = TRUE) &&
+        !requireNamespace("R.utils", quietly = TRUE)) {
+        tfbs_data <- data.table::fread(
+            cmd = paste("gzip -cd --", shQuote(tfbs_path)),
+            header = FALSE,
+            showProgress = FALSE
+        )
+    } else {
+        tfbs_data <- data.table::fread(
+            tfbs_path,
+            header = FALSE,
+            showProgress = FALSE
+        )
+    }
+
+    if (ncol(tfbs_data) != 9L) {
+        stop("TFBS BED file must contain exactly 9 columns; found ", ncol(tfbs_data))
+    }
 
     colnames(tfbs_data) <- c("seqnames", "start", "end", "motif", "phase", "strand", "thickStart", "thickEnd", "itemRgb")
 
@@ -64,19 +84,19 @@ TF_motifs <- function(jointed_gr, context = "all", windowSize = 1e6, DMP_fdr = 0
     )
 
     tfbs_data$TF_family <- tf_family[tfbs_data$TF]
+    tfbs_data$TF_family[is.na(tfbs_data$TF_family)] <- tfbs_data$TF[is.na(tfbs_data$TF_family)]
 
     tfbs_gr <- tfbs_data %>%
         mutate(
-            seqnames = gsub("chr", "Chr", tfbs_data$seqnames),
+            seqnames = as.character(tfbs_data$seqnames),
             hex = sapply(strsplit(as.character(tfbs_data$itemRgb), ","), function(x) {
                 rgb(as.numeric(x[1]), as.numeric(x[2]), as.numeric(x[3]), maxColorValue = 255)
             })
         ) %>%
-        filter(seqnames != "ChrMt") %>%
-        filter(seqnames != "ChrPt") %>%
         dplyr::select(-c(motif, name_parsed, itemRgb, thickStart, thickEnd, phase)) %>%
         dplyr::relocate(strand, TF, TF_family, .after = end) %>%
         makeGRangesFromDataFrame(., keep.extra.columns = T)
+    tfbs_gr <- harmonize_seqlevels(tfbs_gr, reference_bundle, keep_non_primary = TRUE)
 
 
     # m1 <- findOverlaps(meth_var1, tfbs_gr)
@@ -111,21 +131,10 @@ TF_motifs <- function(jointed_gr, context = "all", windowSize = 1e6, DMP_fdr = 0
     fam_size_order <- names(sort(table(dmp_gr$TF_family), decreasing = T))
     windowSize_legend_name <- gsub("e\\+0*", "E", format(windowSize, scientific = TRUE, upper.case = TRUE))
 
-    chr_amount <- length(seqnames(ann.gr)@values)
-
-    # heterochromatin positions (TAIR)
-    heteroChr <- data.frame(
-        Chr = paste0("Chr", c(1:chr_amount)),
-        start = c(12500000, 1250000, 11000000, 1666667, 9444444),
-        end = c(17500000, 7500000, 16250000, 7000000, 15000000)
-    )
-
-    # centromere positions (TAIR)
-    cenChr <- data.frame(
-        Chr = paste0("Chr", c(1:chr_amount)),
-        start = c(14476796, 3462971, 13780083, 3177188, 11207348),
-        end = c(15081019, 3650512, 14388500, 3248799, 11555278)
-    )
+    chromosomes <- unique(as.character(seqnames(ann.gr)))
+    chr_amount <- length(chromosomes)
+    heteroChr <- as.data.frame(heterochromatin)[, c('seqnames', 'start', 'end'), drop = FALSE]
+    cenChr <- as.data.frame(centromeres)[, c('seqnames', 'start', 'end'), drop = FALSE]
 
     ##################### plot
     img_device(out_file_name, w = 4.25, h = 4.25)
@@ -133,7 +142,7 @@ TF_motifs <- function(jointed_gr, context = "all", windowSize = 1e6, DMP_fdr = 0
     par(mar = c(0, 0, 0, 0))
 
     circos.par(gap.degree = c(rep(5, chr_amount - 1), 40), start.degree = 90, points.overflow.warning = FALSE)
-    circos.genomicInitialize(as.data.frame(ann.gr)[, 1:3], sector.names = paste0("Chr ", 1:chr_amount), axis.labels.cex = 0.4, labels.cex = 1.25)
+    circos.genomicInitialize(as.data.frame(ann.gr)[, 1:3], sector.names = chromosomes, axis.labels.cex = 0.4, labels.cex = 1.25)
     for (family.i in fam_size_order) {
         cat(context, ">", family.i, "\n")
         message(time_msg(), context, ":\t", family.i)
@@ -151,18 +160,14 @@ TF_motifs <- function(jointed_gr, context = "all", windowSize = 1e6, DMP_fdr = 0
             )
 
             circos.genomicTrackPlotRegion(density_data, ylim = range(density_data$value), bg.border = NA, track.height = ifelse(length(fam_size_order) > 7, 0.075, 1), track.margin = c(0, 0), panel.fun = function(region, value, ...) {
-                chr.n <- gsub("Chr", "", get.cell.meta.data("sector.index"))
+                chr.n <- get.cell.meta.data('sector.index')
 
                 ### heterocromatin
-                circos.rect(heteroChr[chr.n, 2], ylims[1], heteroChr[chr.n, 3], ylims[2], # xleft, ybottom, xright, ytop
-                    col = "#fcba0320",
-                    border = NA
-                )
+                h <- heteroChr[heteroChr$seqnames == chr.n, , drop = FALSE]
+                if (nrow(h)) for (j in seq_len(nrow(h))) circos.rect(h$start[j], ylims[1], h$end[j], ylims[2], col = '#fcba0320', border = NA)
                 ### centromere
-                circos.rect(cenChr[chr.n, 2], ylims[1], cenChr[chr.n, 3], ylims[2], # xleft, ybottom, xright, ytop
-                    col = "#fcba0360",
-                    border = NA
-                )
+                cgr <- cenChr[cenChr$seqnames == chr.n, , drop = FALSE]
+                if (nrow(cgr)) for (j in seq_len(nrow(cgr))) circos.rect(cgr$start[j], ylims[1], cgr$end[j], ylims[2], col = '#fcba0360', border = NA)
 
                 ### density lines
                 colors <- ifelse(value >= 15, "#440154",
@@ -182,7 +187,7 @@ TF_motifs <- function(jointed_gr, context = "all", windowSize = 1e6, DMP_fdr = 0
                 )
             })
             ### y-axis labels
-            circos.text("Chr1", x = 0, y = 0.5, labels = paste0(family.i, "  "), facing = "downward", cex = 0.45, adj = c(0.85, -0.15))
+            circos.text(chromosomes[1], x = 0, y = 0.5, labels = paste0(family.i, "  "), facing = "downward", cex = 0.45, adj = c(0.85, -0.15))
         })
     }
     circos.clear()

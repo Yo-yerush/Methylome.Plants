@@ -3,7 +3,7 @@ options(width = 100, warn = -1)
 # upload libraries
 lib_packages <- c(
   "dplyr", "tidyr", "ggplot2", "DMRcaller", "rtracklayer", "lattice",
-  "PeakSegDisk", "topGO", "KEGGREST", "Rgraphviz", "org.At.tair.db",
+  "PeakSegDisk", "topGO", "KEGGREST", "Rgraphviz", "yaml",
   "GenomicFeatures", "geomtextpath", "plyranges", "parallel",
   "RColorBrewer", "circlize", "cowplot", "knitr", "data.table"
 )
@@ -46,14 +46,14 @@ rmv_d <- function(x) {
 }
 
 # run the main function
-source(paste0(rmv_d(configs[2]), "/scripts/Methylome.At_main.R"))
+source(paste0(rmv_d(configs[2]), "/scripts/Methylome.Plants_main.R"))
 try({
-  Methylome.At_main(
+  Methylome.Plants_main(
     var1 = vars_vector[1],
     var2 = vars_vector[2],
     var1_path = var1_path,
     var2_path = var2_path,
-    Methylome.At_path = rmv_d(configs[2]),
+    Methylome.Plants_path = rmv_d(configs[2]),
     annotation_file = configs[3],
     description_file = configs[4],
     TEs_file = configs[5],
@@ -83,7 +83,12 @@ try({
     run_GeneBody_metaPlots = as.logical(configs[31]),
     run_GeneFeatures_metaPlots = as.logical(configs[32]),
     gene_features_binSize = as.numeric(configs[33]),
-    metaPlot.random.genes = as.numeric(configs[34])
+    metaPlot.random.genes = as.numeric(configs[34]),
+    reference_bundle_path = if (length(configs) >= 35 && !is.na(configs[35]) && nzchar(configs[35])) {
+      configs[35]
+    } else {
+      file.path(rmv_d(configs[2]), 'reference_bundles/arabidopsis_thaliana_TAIR10.yaml')
+    }
     )
   # message("\n\nwarnings:\n", warnings())
 })

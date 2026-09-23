@@ -1,4 +1,23 @@
-run_GO <- function(comparison_name, genome_ann_path, GO_path, n.cores) {
+run_GO <- function(comparison_name, genome_ann_path, GO_path, n.cores,
+                   reference_bundle = NULL) {
+
+  orgdb_package <- bundle_get(reference_bundle, 'functional.orgdb_package')
+  orgdb_keytype <- bundle_get(reference_bundle, 'functional.orgdb_keytype')
+  gene_to_go_path <- bundle_get(reference_bundle, 'functional.gene_to_go')
+  gene2go <- NULL
+  if (!is.null(gene_to_go_path)) {
+    gene_to_go <- data.table::fread(gene_to_go_path, data.table = FALSE)
+    if (!all(c('gene_id', 'go_id') %in% names(gene_to_go))) {
+      stop('gene_to_go must contain gene_id and go_id columns.')
+    }
+    gene2go <- split(as.character(gene_to_go$go_id), as.character(gene_to_go$gene_id))
+  }
+  if (is.null(orgdb_package) && is.null(gene2go)) {
+    stop('GO analysis requires functional.orgdb_package or functional.gene_to_go.')
+  }
+  if (!is.null(orgdb_package) && !requireNamespace(orgdb_package, quietly = TRUE)) {
+    stop('GO annotation package is not installed: ', orgdb_package)
+  }
 
   n.cores.ann = ifelse(n.cores >= 6, 6, n.cores)
   n.cores.cntx = ifelse(n.cores >= 18, 3, n.cores)
@@ -16,7 +35,10 @@ run_GO <- function(comparison_name, genome_ann_path, GO_path, n.cores) {
                 context = contx_loop,
                 annotation = ann_loop,
                 genome_ann_path = genome_ann_path,
-                path_for_results = GO_path
+                path_for_results = GO_path,
+                orgdb_package = orgdb_package,
+                orgdb_keytype = orgdb_keytype,
+                gene2go = gene2go
               ))
             },
             error = function(cond) {
@@ -52,7 +74,10 @@ top.GO.fun = function(treatment,
                       path_for_results,
                       n.nodes = NULL,
                       get_GO_term_genes = c(F, "GO_term"),
-                      save.files = T) {
+                      save.files = T,
+                      orgdb_package = NULL,
+                      orgdb_keytype = NULL,
+                      gene2go = NULL) {
   
   ##########################################
   start_path = getwd()
@@ -63,9 +88,17 @@ top.GO.fun = function(treatment,
                       c("gene_id","pValue")]
   
   
-  tair_ids <- data.frame(gene_id = keys(org.At.tair.db))
+  if (!is.null(gene2go)) {
+    organism_ids <- data.frame(gene_id = names(gene2go))
+  } else {
+    orgdb <- getExportedValue(orgdb_package, orgdb_package)
+    if (is.null(orgdb_keytype)) orgdb_keytype <- AnnotationDbi::keytypes(orgdb)[1]
+    organism_ids <- data.frame(
+      gene_id = AnnotationDbi::keys(orgdb, keytype = orgdb_keytype)
+    )
+  }
   
-  all_genes = merge.data.frame(DMR_file, tair_ids, by = "gene_id", all.y = T)
+  all_genes = merge.data.frame(DMR_file, organism_ids, by = "gene_id", all.y = T)
   all_genes$pValue[is.na(all_genes$pValue)] <- 0.999
   all_genes$pValue[all_genes$pValue == 0] <- 1e-300
   
@@ -74,13 +107,22 @@ top.GO.fun = function(treatment,
   
   ############################################################
   #### type Ontology  ####
-  myGOdata <- new("topGOdata",
-                  ontology = GO_Ontology_type,
-                  allGenes = geneList,
-                  geneSelectionFun = function(x)(x == 1),
-                  annot = annFUN.org,
-                  #nodeSize = 5,
-                  mapping="org.At.tair.db") 
+  if (!is.null(gene2go)) {
+    myGOdata <- new('topGOdata',
+                    ontology = GO_Ontology_type,
+                    allGenes = geneList,
+                    geneSelectionFun = function(x)(x == 1),
+                    annot = annFUN.gene2GO,
+                    gene2GO = gene2go)
+  } else {
+    myGOdata <- new('topGOdata',
+                    ontology = GO_Ontology_type,
+                    allGenes = geneList,
+                    geneSelectionFun = function(x)(x == 1),
+                    annot = annFUN.org,
+                    mapping = orgdb_package,
+                    ID = orgdb_keytype)
+  }
   
   sg <- sigGenes(myGOdata)
   str(sg)

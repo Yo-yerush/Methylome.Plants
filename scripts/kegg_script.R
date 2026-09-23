@@ -1,7 +1,27 @@
-run_KEGG <- function(comparison_name, genome_ann_path, KEGG_path, n.cores) {
+run_KEGG <- function(comparison_name, genome_ann_path, KEGG_path, n.cores,
+                     reference_bundle = NULL) {
+  kegg_organism <- bundle_get(reference_bundle, 'functional.kegg_organism')
+  if (is.null(kegg_organism)) stop('KEGG analysis requires functional.kegg_organism in the reference bundle.')
+  orgdb_package <- bundle_get(reference_bundle, 'functional.orgdb_package')
+  orgdb_keytype <- bundle_get(reference_bundle, 'functional.orgdb_keytype')
+  kegg_id_map_path <- bundle_get(reference_bundle, 'functional.kegg_id_map')
+  kegg_id_map <- NULL
+  if (!is.null(kegg_id_map_path)) {
+    kegg_id_map <- data.table::fread(kegg_id_map_path, data.table = FALSE)
+    if (!all(c('gene_id', 'kegg_id') %in% names(kegg_id_map))) {
+      stop('kegg_id_map must contain gene_id and kegg_id columns.')
+    }
+  }
+  universe_ids <- NULL
+  if (!is.null(orgdb_package) && requireNamespace(orgdb_package, quietly = TRUE)) {
+    orgdb <- getExportedValue(orgdb_package, orgdb_package)
+    if (is.null(orgdb_keytype)) orgdb_keytype <- AnnotationDbi::keytypes(orgdb)[1]
+    universe_ids <- AnnotationDbi::keys(orgdb, keytype = orgdb_keytype)
+  }
+  if (is.null(universe_ids) && !is.null(kegg_id_map)) universe_ids <- unique(kegg_id_map$gene_id)
   tryCatch(
     {
-      pathways.list <- keggList("pathway", "ath")
+      pathways.list <- keggList('pathway', kegg_organism)
       # Pull all genes for each pathway
       pathway.codes <- sub("path:", "", names(pathways.list))
       genes.by.pathway.loop <- sapply(
@@ -16,6 +36,11 @@ run_KEGG <- function(comparison_name, genome_ann_path, KEGG_path, n.cores) {
           return(pw2)
         }
       )
+      if (!is.null(kegg_id_map)) {
+        genes.by.pathway.loop <- lapply(genes.by.pathway.loop, function(ids) {
+          unique(kegg_id_map$gene_id[match(ids, kegg_id_map$kegg_id, nomatch = 0L)])
+        })
+      }
       message("create KEGG 'gene to pathway' dataset: successfully")
     },
     error = function(cond) {
@@ -41,7 +66,9 @@ run_KEGG <- function(comparison_name, genome_ann_path, KEGG_path, n.cores) {
               gene2pathway = genes.by.pathway.loop,
               pathways.list = pathways.list,
               genome_ann_path = genome_ann_path,
-              path_for_results = KEGG_path
+              path_for_results = KEGG_path,
+              kegg_organism = kegg_organism,
+              universe_ids = universe_ids
             )
           },
           error = function(cond) {
@@ -73,7 +100,9 @@ kegg.pathway.fun = function(treatment,
                             pValue.kegg = 0.01,
                             genome_ann_path,
                             path_for_results,
-                            save.files = T) {
+                            save.files = T,
+                            kegg_organism,
+                            universe_ids = NULL) {
   
   ##########################################
   start_path = getwd()
@@ -83,9 +112,9 @@ kegg.pathway.fun = function(treatment,
   DMR_file = DMR_file[DMR_file$regionType == gain_OR_loss,
                       c("gene_id","pValue")]
   #####
-  tair_ids <- data.frame(gene_id = keys(org.At.tair.db))
-  #####
-  all_genes = merge.data.frame(DMR_file, tair_ids, by = "gene_id", all.y = T)
+  if (is.null(universe_ids)) universe_ids <- unique(DMR_file$gene_id)
+  organism_ids <- data.frame(gene_id = universe_ids)
+  all_genes = merge.data.frame(DMR_file, organism_ids, by = "gene_id", all.y = T)
   all_genes$pValue[is.na(all_genes$pValue)] <- 0.999
   all_genes$pValue[all_genes$pValue == 0] <- 1e-300
   
@@ -94,7 +123,7 @@ kegg.pathway.fun = function(treatment,
   
   # Pull all genes for each pathway
   if (is.null(gene2pathway)) {
-    pathways.list <- keggList("pathway", "ath")
+    pathways.list <- keggList('pathway', kegg_organism)
     pathway.codes <- sub("path:", "", names(pathways.list)) 
     genes.by.pathway <- sapply(pathway.codes,
                                function(pwid){
@@ -136,7 +165,7 @@ kegg.pathway.fun = function(treatment,
   outdat$Significant <- pVals.by.pathway[,"Significant"]
   outdat$Annotated <- pVals.by.pathway[,"Annotated"]
   outdat <- outdat[order(outdat$p.value),]
-  outdat$pathway.name = gsub(" - Arabidopsis thaliana \\(thale cress\\)","", outdat$pathway.name)
+  outdat$pathway.name = sub(' - [^-]+$', '', outdat$pathway.name)
   outdat$pathway.name = gsub(",",";", outdat$pathway.name)
   outdat = outdat[outdat$p.value <= pValue.kegg,] %>% na.omit()
   

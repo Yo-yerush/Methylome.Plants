@@ -252,7 +252,8 @@ summarise_surp_2 <- function(x, min_c) {
 ########################################################################
 
 dHRs_circular_plot <- function(CG_df, CHG_df, CHH_df, ann.file, TE_4_dens, comparison_name) {
-    chr_amount <- length(seqnames(ann.file)@values)
+    chromosomes <- as.character(seqlevels(ann.file))
+    chr_amount <- length(chromosomes)
 
     genes_type <- ann.file[which(ann.file$type == "gene")]
 
@@ -260,7 +261,7 @@ dHRs_circular_plot <- function(CG_df, CHG_df, CHH_df, ann.file, TE_4_dens, compa
     img_device(paste0("dHR_Density_", comparison_name), w = 3.25, h = 3.25)
 
     circos.par(start.degree = 90)
-    circos.genomicInitialize(as.data.frame(ann.file)[, 1:3], sector.names = paste0("Chr ", seq(chr_amount)), axis.labels.cex = 0.325, labels.cex = 1.35)
+    circos.genomicInitialize(as.data.frame(ann.file)[, 1:3], sector.names = chromosomes, axis.labels.cex = 0.325, labels.cex = 1.35)
 
     circos.genomicDensity(
         list(
@@ -308,21 +309,28 @@ mannh_plots <- function(df, cntx, fdr = 0.95) {
     S_threshold <- as.numeric(quantile(df$sum_surprisal, fdr))
 
     # add cumulative genome coordinate
-    chr_lengths <- tapply(df$end, df$seqnames, max)
+    seq_names <- as.character(df$seqnames)
+    chr_order <- if (is.factor(df$seqnames)) {
+        levels(droplevels(df$seqnames))
+    } else {
+        unique(seq_names)
+    }
+    chr_lengths <- vapply(chr_order, function(chr) max(df$end[seq_names == chr]), numeric(1))
     chr_offset <- c(0, cumsum(chr_lengths[-length(chr_lengths)]))
-    names(chr_offset) <- names(chr_lengths)
+    names(chr_offset) <- chr_order
 
-    df$coord <- df$start + chr_offset[df$seqnames]
+    df$coord <- df$start + chr_offset[seq_names]
+    df$chr_index <- match(seq_names, chr_order)
 
     manH_p <- ggplot(df, aes(coord, sum_surprisal,
-        colour = as.factor(as.integer(seqnames) %% 2)
+        colour = as.factor(chr_index %% 2)
     )) +
         geom_point(size = 0.025) +
         geom_hline(yintercept = S_threshold, color = "#bf6828", linetype = "dashed", size = 0.7) +
         scale_colour_manual(values = c("grey40", "#7ca182"), guide = "none") +
         scale_x_continuous(
             breaks = chr_offset + chr_lengths / 2,
-            labels = paste0("Chr", seq_along(chr_offset))
+            labels = chr_order
         ) +
         expand_limits(y = 0) +
         labs(

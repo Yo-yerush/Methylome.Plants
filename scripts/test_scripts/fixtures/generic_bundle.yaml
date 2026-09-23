@@ -1,0 +1,34 @@
+schema_version: 1
+species:
+  id: synthetic_plant
+  display_name: Synthetic plant
+  assembly: test_v1
+genome:
+  chromosome_sizes: chromosome_sizes.tsv
+  seqname_aliases: seqname_aliases.tsv
+  primary_seqlevels: [linkage_A, linkage_B]
+  chloroplast_seqlevels: [plastome]
+  mitochondrial_seqlevels: []
+  include_non_primary: false
+annotation:
+  genes: genes.csv
+  format: csv
+  gene_id_field: locus
+  biotype_field: biotype
+  feature_type_field: feature
+  protein_coding_values: [coding]
+  descriptions: descriptions.tsv
+  description_gene_id_field: locus
+  transposable_elements: tes.tsv
+  te_format: tsv
+  te_id_field: repeat_id
+  te_family_field: family
+  te_superfamily_field: class
+regions:
+  centromeres: centromeres.bed
+  heterochromatin: null
+functional:
+  gene_to_go: gene_to_go.tsv
+  kegg_organism: null
+  tfbs: null
+  gene_sets: gene_sets.tsv

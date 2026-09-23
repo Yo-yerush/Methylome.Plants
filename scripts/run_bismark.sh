@@ -9,17 +9,17 @@ Bismark WGBS pipeline
 
 Usage:
 ------
-run_bismark.sh [-s <required>] [-g TAIR10] [options]
+run_bismark.sh -s <samples.tsv> -g <reference.fa> [options]
 
 Options:
 --------
 -s, --samples   Tab-delimited two-column file: sample-name <TAB> fastq-path
--g, --genome    FASTA of the reference genome [default: TAIR10]
+-g, --genome    FASTA of the reference genome [required]; use TAIR10 for the built-in Arabidopsis download
 -o, --outdir    Output directory [default: ./bismark_results]
 -n, --ncores    Number of cores (max). multiples of 4 recommended [default: 8]
 -m, --mem       Buffer size for 'bismark_methylation_extractor' [default: 8G]
 --cx            Produce and keep only '_CX_report.txt.gz' file
---mat           Produce samples table (.txt) for 'Methylome.At' pipeline
+--mat           Produce samples table (.txt) for 'Methylome.Plants' pipeline
 --indx          Keep the genome index directory (applies only if --cx is on)
 --sort          Sort & index BAM files (applies only if --cx is off)
 --strand        Keep top/bottom strand (OT/OB) files [remove in default]
@@ -44,14 +44,14 @@ wt_2    PATH/TO/FILE/wt2_R2.fastq
 
 Run:
 ----
-$ ./run_bismark.sh -s samples_table.txt -g TAIR10 -n 30 --cx --mat
+$ ./run_bismark.sh -s samples_table.txt -g /references/species_assembly.fa -n 30 --cx --mat
 ###############################################################################
 "
 
 ####################
 ### default values
 sample_table=
-genome_file_name="TAIR10"
+genome_file_name=""
 output_path="./bismark_results"
 output_suffix="wgbs_bismark_$(date +%d%m%y)"
 n_cores=8
@@ -131,10 +131,19 @@ fi
 # ensure sample table has unix line endings (can also try: sed -i 's/\r$//' "$sample_table")
 dos2unix "$sample_table" 2>/dev/null
 
-# check if 'genome_file_name' file exists
+# require an explicit assembly; TAIR10 remains as a backward-compatible download keyword
+if [[ -z "$genome_file_name" ]]; then
+    echo "Error: --genome is required. Provide a reference FASTA or the keyword TAIR10."
+    exit 1
+fi
 if [[ ! -f "$genome_file_name" && "$genome_file_name" != "TAIR10" ]]; then
     echo "Error: Genome file '$genome_file_name' does not exist."
     exit 1
+fi
+
+sample_table=$(readlink -f "$sample_table")
+if [[ "$genome_file_name" != "TAIR10" ]]; then
+    genome_file_name=$(readlink -f "$genome_file_name")
 fi
 
 # check for duplicate arguments
@@ -166,13 +175,13 @@ fi
 ####################
 
 ori_path=$(pwd)
-mkdir -p $output_path
-cd $output_path
+mkdir -p "$output_path"
+cd "$output_path"
 output_path=$(pwd)
 
 ### tmp file for analysis
-mkdir -p $output_path/tmp
-cd $output_path/tmp
+mkdir -p "$output_path/tmp"
+cd "$output_path/tmp"
 
 ### Generate log file with a timestamp
 log_file="../${output_suffix}.log"
@@ -196,16 +205,16 @@ echo "" >> "$log_file"
 
 ####################
 ### index the genom
-mkdir -p $output_path/genome_indx
+mkdir -p "$output_path/genome_indx"
 
-# Get the genome file from TAIR10 or from file path
+# Get the genome from the explicit FASTA path or the TAIR10 compatibility keyword
 if [[ "$genome_file_name" == "TAIR10" ]]; then
     echo "download TAIR10 FASTA" >> "$log_file"
     echo -e "\n*************\n\ndownload the default TAIR10 reference FASTA file\n\n*************\n\n"
     wget -O "${output_path}/genome_indx/TAIR10_chr_all.fa.gz" "https://www.arabidopsis.org/api/download-files/download?filePath=Genes/TAIR10_genome_release/TAIR10_chromosome_files/TAIR10_chr_all.fas.gz"
     genome_b_name="TAIR10_chr_all.fa.gz"
 else
-    cp $genome_file_name $output_path/genome_indx
+    cp "$genome_file_name" "$output_path/genome_indx"
     # Rename genome file if needed
     genome_b_name=$(basename "$genome_file_name")
     genome_new_path=$output_path/genome_indx/$genome_b_name
@@ -219,11 +228,11 @@ else
 fi
 
 echo "indexing genome file: '$genome_b_name'" >> "$log_file"
-bismark_genome_preparation $output_path/genome_indx
+bismark_genome_preparation "$output_path/genome_indx"
 
 
 ####################
-### create samples table file for Methylome.At
+### create samples table file for Methylome.Plants
 if [[ "$methAt_samples" == "true" ]]; then
     samples_table_tmp="${output_path}/tmp/S_T_$(date +"%y%m%d%H%M%S").tmp"
     > "$samples_table_tmp"
@@ -268,8 +277,8 @@ for ((u = 0; u < ${#sample_name[@]}; u++)); do
         fi
     fi
     if [[ "$keep_unmapped" == "true" ]]; then
-        rm $output_path/"$i"/"$i"*.bam
-        rm $output_path/"$i"/"$i"*_report.txt
+        rm "$output_path/$i"/"$i"*.bam
+        rm "$output_path/$i"/"$i"*_report.txt
         if [[ "$paired_end_sequence" == "true" ]]; then
             mv $output_path/"$i"/*unmapped_reads_1.fq.gz $output_path/"$i"/"$i"_unmapped_reads_1.fq.gz # rename
             mv $output_path/"$i"/*unmapped_reads_2.fq.gz $output_path/"$i"/"$i"_unmapped_reads_2.fq.gz # rename
@@ -288,7 +297,7 @@ for ((u = 0; u < ${#sample_name[@]}; u++)); do
         ### methylation calling
         echo "" >> "$log_file"
         echo "methylation calling..." >> "$log_file"
-        mkdir -p $output_path/"$i"/methylation_extractor
+        mkdir -p "$output_path/$i/methylation_extractor"
 
         if [[ "$keep_cx" == "true" ]]; then
             # run 'methylation_extractor' and keep 'CX_report' file only
@@ -317,7 +326,7 @@ for ((u = 0; u < ${#sample_name[@]}; u++)); do
         fi
 
         # # # # # # # # # # # #
-        # samples table for Methylome.At
+        # samples table for Methylome.Plants
         if [[ "$methAt_samples" == "true" ]]; then
             i_unique=$(printf '%s\n' "$i" | sed 's/[._][0-9]*$//')
             if [[ "$keep_cx" == "true" ]]; then
@@ -344,9 +353,9 @@ if [[ "$methAt_samples" == "true" ]]; then
 fi
 
 if [[ "$keep_cx" == "true" && "$keep_indx" == "false" ]]; then
-    rm -r -- $output_path/genome_indx
+    rm -r -- "$output_path/genome_indx"
 fi
 
 echo "**  $(date +"%d-%m-%y %H:%M")" >> "$log_file"
-cd $ori_path
-rm -r $output_path/tmp
+cd "$ori_path"
+rm -r "$output_path/tmp"

@@ -19,7 +19,7 @@ qc_tile_methylation <- function(meth_var1_rep, meth_var2_rep,
   n_var1 <- length(var1_path)
   n_var2 <- length(var2_path)
 
-  # TAIR10 chromosome lengths
+  # Chromosome lengths observed in the joined methylation object
   chr_lengths <- tapply(end(meth_var1_rep), seqnames(meth_var1_rep), max)
   genome_gr <- GRanges(seqnames = names(chr_lengths),
                        ranges = IRanges(start = 1, end = chr_lengths))
@@ -93,24 +93,30 @@ qc_tile_methylation <- function(meth_var1_rep, meth_var2_rep,
 #    for coding-gene bodies, promoters, TEs and gbM list
 ###########################################################################
 qc_meth_distribution <- function(meth_var1, meth_var2, annotation.gr, TE_gr,
-                                 var1, var2, Methylome.At_path = ".", minReads = 6) {
+                                 var1, var2, Methylome.Plants_path = ".", minReads = 6,
+                                 stable_gbm_file = NULL, dynamic_gbm_file = NULL,
+                                 promoter_upstream = 2000L) {
 
   Genes_0 <- annotation.gr[annotation.gr$type == "gene"]
-  Genes <- Genes_0[grepl("protein_coding", Genes_0$gene_model_type)]
-  Promoters <- promoters(Genes, upstream = 2000, downstream = 0, use.names = TRUE)
+  coding_mask <- grepl("protein_coding", Genes_0$gene_model_type)
+  Genes <- if (any(coding_mask, na.rm = TRUE)) Genes_0[coding_mask %in% TRUE] else Genes_0
+  Promoters <- safe_promoters(Genes, promoter_upstream)
 
   # load stable/dynamic gbM gene lists (Williams et al. 2023)
-  stable_gbM_file <- file.path(Methylome.At_path, "annotation_files", "At_stable_gbM_Williams23.txt")
-  dynamic_gbM_file <- file.path(Methylome.At_path, "annotation_files", "At_dynamic_gbM_Williams23.txt")
+  stable_gbM_file <- stable_gbm_file
+  dynamic_gbM_file <- dynamic_gbm_file
 
   features <- list(
     list(name = "Gene body", gr = Genes),
-    list(name = "Promoter", gr = Promoters),
-    list(name = "TE", gr = TE_gr)
+    list(name = "Promoter", gr = Promoters)
   )
-  feature_levels <- c("Gene body", "Promoter", "TE")
+  feature_levels <- c("Gene body", "Promoter")
+  if (length(TE_gr)) {
+    features[[length(features) + 1L]] <- list(name = "TE", gr = TE_gr)
+    feature_levels <- c(feature_levels, "TE")
+  }
 
-  if (file.exists(stable_gbM_file)) {
+  if (!is.null(stable_gbM_file) && file.exists(stable_gbM_file)) {
     stable_ids <- readLines(stable_gbM_file)
     stable_ids <- trimws(stable_ids[nchar(stable_ids) > 0])
     stable_gr <- Genes_0[Genes_0$gene_id %in% stable_ids]
@@ -120,7 +126,7 @@ qc_meth_distribution <- function(meth_var1, meth_var2, annotation.gr, TE_gr,
     }
   }
 
-  if (file.exists(dynamic_gbM_file)) {
+  if (!is.null(dynamic_gbM_file) && file.exists(dynamic_gbM_file)) {
     dynamic_ids <- readLines(dynamic_gbM_file)
     dynamic_ids <- trimws(dynamic_ids[nchar(dynamic_ids) > 0])
     dynamic_gr <- Genes_0[Genes_0$gene_id %in% dynamic_ids]
@@ -412,7 +418,8 @@ run_QC_plots <- function(meth_var1, meth_var2,
                          meth_var1_replicates, meth_var2_replicates,
                          var1, var2, var1_path, var2_path,
                          annotation.gr, TE_gr,
-                         Methylome.At_path = ".",
+                         Methylome.Plants_path = ".", reference_bundle = NULL,
+                         promoter_upstream = 2000L,
                          tile_width = 1500, minReadsPerTile = 10) {
 
   # create subdirectories
@@ -426,13 +433,17 @@ run_QC_plots <- function(meth_var1, meth_var2,
   }
 
   ##### 1. methylation distribution plots #####
-  cat("\nmethylation distribution (gene body / promoter / TE)...")
+  qc_region_label <- if (length(TE_gr)) "gene body / promoter / TE" else "gene body / promoter"
+  cat("\nmethylation distribution (", qc_region_label, ")...", sep = "")
   message(time_msg(), "QC: methylation distribution plots: ", appendLF = FALSE)
   tryCatch(
     {
       setwd(dist_dir)
       qc_meth_distribution(meth_var1, meth_var2, annotation.gr, TE_gr, var1, var2,
-                            Methylome.At_path = Methylome.At_path)
+                            Methylome.Plants_path = Methylome.Plants_path,
+                            stable_gbm_file = bundle_get(reference_bundle, 'functional.stable_gbm'),
+                            dynamic_gbm_file = bundle_get(reference_bundle, 'functional.dynamic_gbm'),
+                            promoter_upstream = promoter_upstream)
       setwd(qc_base)
       message("done")
       cat(" done\n")

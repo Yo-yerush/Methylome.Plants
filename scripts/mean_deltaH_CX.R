@@ -78,6 +78,7 @@ ChrPlots_CX_all <- function(
     chr_amount,
     chr_length,
     is_subCX,
+    chr_labels = as.character(seq_len(chr_amount)),
     TE_as_gr = NULL) {
     ### color palette
     if (!is_subCX) {
@@ -101,9 +102,10 @@ ChrPlots_CX_all <- function(
     ## column 7: legend
 
     if (is.null(TE_as_gr)) {
+        panel_count <- 4 * (chr_amount + 1)
         lay <- cbind(
-            matrix(1:24, nrow = 4, byrow = TRUE),
-            rep(25, 4) # legend in column 7, spans all rows
+            matrix(seq_len(panel_count), nrow = 4, byrow = TRUE),
+            rep(panel_count + 1, 4)
         )
 
         layout(lay,
@@ -111,9 +113,10 @@ ChrPlots_CX_all <- function(
             heights = c(1, 1, 1, 0.25) # last row for Chrs
         )
     } else {
+        panel_count <- 5 * (chr_amount + 1)
         lay <- cbind(
-            matrix(1:30, nrow = 5, byrow = TRUE),
-            rep(31, 5)
+            matrix(seq_len(panel_count), nrow = 5, byrow = TRUE),
+            rep(panel_count + 1, 5)
         )
 
         layout(lay,
@@ -220,7 +223,7 @@ ChrPlots_CX_all <- function(
         plot.new()
         mtext(
             side = 1,
-            text = paste0("Chr ", chr),
+            text = chr_labels[chr],
             line = -0.5,
             at = 0.5,
             adj = 0.5,
@@ -262,7 +265,7 @@ te_plot_conf <- function(x, chr_amount) {
     te_gr <- x %>%
         circlize::genomicDensity(window.size = 0.5e6) %>%
         makeGRangesFromDataFrame(keep.extra.columns = TRUE) %>%
-        renameSeqlevels(gsub("Chr|chr|chromosome", "", seqlevels(.)))
+        identity()
     names(mcols(te_gr)) <- "mean_value"
 
     y_max_te <- 1 # max(te_gr$mean_value)
@@ -397,9 +400,17 @@ run_mean_deltaH_CX <- function(ctrl_name, trnt_name, ctrl_pool, trnt_pool, TE.gr
         select(seqnames, start, end, Proportion, deltaH, context, trinucleotide_context) %>%
         filter(!is.na(deltaH))
 
-    # change chr names
-    ctrl_pool$seqnames <- gsub("Chr", "", ctrl_pool$seqnames)
-    trnt_pool$seqnames <- gsub("Chr", "", trnt_pool$seqnames)
+    chr_labels <- unique(c(as.character(ctrl_pool$seqnames), as.character(trnt_pool$seqnames)))
+    chr_map <- stats::setNames(as.character(seq_along(chr_labels)), chr_labels)
+    internal_levels <- as.character(seq_along(chr_labels))
+    ctrl_pool$seqnames <- factor(unname(chr_map[as.character(ctrl_pool$seqnames)]), levels = internal_levels)
+    trnt_pool$seqnames <- factor(unname(chr_map[as.character(trnt_pool$seqnames)]), levels = internal_levels)
+    if (length(TE.gr)) {
+        te_current <- as.character(seqlevels(TE.gr))
+        te_present <- intersect(te_current, names(chr_map))
+        TE.gr <- keepSeqlevels(TE.gr, te_present, pruning.mode = 'coarse')
+        TE.gr <- renameSeqlevels(TE.gr, stats::setNames(unname(chr_map[te_present]), te_present))
+    }
 
     # delta df
     cat(paste0("\rCalculate methylated/unmethylated C's ratio... [delta]          "))
@@ -418,7 +429,7 @@ run_mean_deltaH_CX <- function(ctrl_name, trnt_name, ctrl_pool, trnt_pool, TE.gr
         summarise(max_start = max(start), .groups = "drop") %>%
         pull(max_start)
     max_chr_length <- chr_length / max(chr_length)
-    chr_amount <- length(chr_length)
+    chr_amount <- length(chr_labels)
     cat(paste0("\rNormelize chromosome panel size to its length: done!"))
     cat("\n-------------\n")
 
@@ -497,6 +508,7 @@ run_mean_deltaH_CX <- function(ctrl_name, trnt_name, ctrl_pool, trnt_pool, TE.gr
                 ylab_suffix = NULL,
                 y_title_cex = 1,
                 chr_amount = chr_amount,
+                chr_labels = chr_labels,
                 chr_length = max_chr_length,
                 is_subCX = FALSE,
                 TE_as_gr = TE.gr
@@ -528,6 +540,7 @@ run_mean_deltaH_CX <- function(ctrl_name, trnt_name, ctrl_pool, trnt_pool, TE.gr
                 ylab_suffix = NULL,
                 y_title_cex = 1,
                 chr_amount = chr_amount,
+                chr_labels = chr_labels,
                 chr_length = max_chr_length,
                 is_subCX = TRUE,
                 TE_as_gr = TE.gr

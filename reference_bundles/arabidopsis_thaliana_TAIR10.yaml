@@ -1,0 +1,41 @@
+schema_version: 1
+
+species:
+  id: arabidopsis_thaliana
+  display_name: Arabidopsis thaliana
+  assembly: TAIR10
+
+genome:
+  chromosome_sizes: TAIR10/chromosome_sizes.tsv
+  seqname_aliases: TAIR10/seqname_aliases.tsv
+  primary_seqlevels: [Chr1, Chr2, Chr3, Chr4, Chr5]
+  chloroplast_seqlevels: [ChrC]
+  mitochondrial_seqlevels: [ChrM]
+  include_non_primary: false
+
+annotation:
+  genes: ../annotation_files/At_custom_annotations.csv.gz
+  format: csv
+  gene_id_field: gene_id
+  biotype_field: gene_model_type
+  feature_type_field: type
+  protein_coding_values: [protein_coding]
+  promoter_upstream: 2000
+  descriptions: ../annotation_files/At_custom_description_file.csv.gz
+  description_gene_id_field: gene_id
+  transposable_elements: ../annotation_files/TAIR10_Transposable_Elements.txt
+  te_format: tair_legacy
+
+regions:
+  centromeres: TAIR10/centromeres.bed
+  heterochromatin: TAIR10/heterochromatin.bed
+
+functional:
+  orgdb_package: org.At.tair.db
+  orgdb_keytype: TAIR
+  kegg_organism: ath
+  tfbs: ../annotation_files/TAIR10_compressed_TFBSs.bed.gz
+  stable_gbm: ../annotation_files/At_stable_gbM_Williams23.txt
+  dynamic_gbm: ../annotation_files/At_dynamic_gbM_Williams23.txt
+  gene_sets_url: https://raw.githubusercontent.com/Yo-yerush/RA_lab_db/refs/heads/main/Arabidopsis/Groups_genes_list
+  gene_sets_adapter: TAIR10/functional_groups_adapter.R

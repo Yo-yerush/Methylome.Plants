@@ -3,7 +3,6 @@
 #     library(tidyr)
 #     library(ggplot2)
 #     library(DMRcaller)
-#     library(org.At.tair.db)
 #     library(GenomicFeatures)
 #     library(plyranges)
 #     library(parallel)
@@ -75,6 +74,7 @@ calculate_te_methylation <- function(meth_data, TE_gr, context, is.delta = F) {
 ##################################################################################
 
 te_size_plot <- function(x_list, cntx, line_col = "red4", point_col = "gray20") {
+    x_max <- max(x_list[[cntx]]$width, na.rm = TRUE)
     ggplot(x_list[[cntx]], aes(x = width, y = avg_meth, color = sample)) +
         geom_vline(xintercept = 4000, linetype = "dashed", color = "gray60") +
         geom_point(alpha = 0.6, size = 0.3, shape = 20) +
@@ -104,27 +104,38 @@ te_size_plot <- function(x_list, cntx, line_col = "red4", point_col = "gray20") 
             axis.text.x = element_text(size = 9)
         ) +
         scale_x_continuous(
-            breaks = c(65, 5000, 10000, 15000, 19935),
-            labels = seq(0, 20, by = 5),
-            limits = c(0, 20000), expand = c(0, 0)
+            breaks = pretty(c(0, x_max), n = 5),
+            limits = c(0, x_max), expand = c(0, 0),
+            labels = function(x) round(x / 1000, 1)
         ) +
         scale_y_continuous(limits = c(-0.3, 0.3), expand = c(0, 0), breaks = c(-0.296, 0, 0.296), labels = c(-0.3, 0, 0.3))
 }
 
 ##################################################################################
 
-distance_from_centromer <- function(TE_meth_delta_list, TE_gr = TE_gr, window_size = 1e6, lines_col = c("#3d53b4", "#3b8f3e", "#bb4949"), y_max = NULL, y_min = NULL, y_breaks = NULL) {
-    # centromers positions
-    cen_pos <- c(14.845, 3.44, 13.855, 3.13, 11.795) * 1e6
+distance_from_centromer <- function(TE_meth_delta_list, TE_gr = TE_gr,
+                                    centromeres = GRanges(), window_size = 1e6,
+                                    lines_col = c("#3d53b4", "#3b8f3e", "#bb4949"),
+                                    y_max = NULL, y_min = NULL, y_breaks = NULL) {
+    if (length(centromeres) == 0L) {
+        return(list(
+            df = data.frame(),
+            plot = ggplot() +
+                annotate('text', x = 0, y = 0, label = 'Centromere coordinates not supplied') +
+                theme_void()
+        ))
+    }
+    cen_df <- as.data.frame(centromeres)[, c('seqnames', 'start', 'end')]
+    cen_df$centromere <- (cen_df$start + cen_df$end) / 2
+    cen_pos <- stats::setNames(cen_df$centromere, cen_df$seqnames)
     te_distance <- data.frame(
         chr = as.character(seqnames(TE_gr)),
         pos = (as.numeric(start(TE_gr)) + as.numeric(end(TE_gr))) / 2,
         te_id = TE_gr$gene_id,
         centromere = NA
     )
-    for (cen_i in 1:5) {
-        te_distance$centromere[te_distance$chr == paste0("Chr", cen_i)] <- cen_pos[cen_i]
-    }
+    te_distance$centromere <- unname(cen_pos[te_distance$chr])
+    te_distance <- te_distance[!is.na(te_distance$centromere), , drop = FALSE]
     te_distance$distance <- abs(te_distance$centromere - te_distance$pos)
     all_cx_dis <- rbind(
         TE_meth_delta_list[["CG"]],
@@ -186,6 +197,7 @@ distance_from_centromer <- function(TE_meth_delta_list, TE_gr = TE_gr, window_si
 
     ########
 
+    max_distance <- max(te_distance_cntx$distance, na.rm = TRUE)
     te_distance_plot <- ggplot(data = te_distance_cntx, aes(x = distance, y = avg_meth, color = context, group = context)) +
         geom_line(linewidth = 0.85) +
         theme_bw() + # theme_classic() +
@@ -206,14 +218,13 @@ distance_from_centromer <- function(TE_meth_delta_list, TE_gr = TE_gr, window_si
             axis.text.x = element_text(size = 9)
         ) +
         scale_x_continuous(
-            limits = c(0, 15), # max(-te_distance_cntx$distance)),
-            breaks = c(0.06, 5, 10, 14.94),
-            labels = seq(0, 15, by = 5),
+            limits = c(0, max_distance),
+            breaks = pretty(c(0, max_distance), n = 4),
             expand = c(0, 0)
         ) +
         y_axis_limits +
         annotate("text",
-            x = 12.75, # 12.25,
+            x = max_distance * 0.85,
             y = max(te_distance_cntx$avg_meth) * 0.98,
             label = c("CG", "\nCHG", "\n\nCHH"),
             hjust = 0, vjust = 0.75, size = 3.25,

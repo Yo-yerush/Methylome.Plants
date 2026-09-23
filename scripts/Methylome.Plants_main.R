@@ -1,11 +1,11 @@
-Methylome.At_main <- function(var1, # control
+Methylome.Plants_main <- function(var1, # control
                               var2, # treatment
                               var1_path,
                               var2_path,
-                              Methylome.At_path = ".",
-                              annotation_file = "./annotation_files/At_custom_annotations.csv.gz",
-                              description_file = "./annotation_files/At_custom_annotations.csv.gz",
-                              TEs_file = "./annotation_files/At_custom_annotations.csv.gz",
+                              Methylome.Plants_path = ".",
+                              annotation_file = NULL,
+                              description_file = NULL,
+                              TEs_file = NULL,
                               minProportionDiff = c(0.4, 0.2, 0.1), # CG, CHG, CHH
                               binSize = 100,
                               minCytosinesCount = 4,
@@ -32,19 +32,24 @@ Methylome.At_main <- function(var1, # control
                               run_GeneBody_metaPlots = FALSE,
                               run_GeneFeatures_metaPlots = FALSE,
                               gene_features_binSize = 10,
-                              metaPlot.random.genes = 10000) {
+                              metaPlot.random.genes = 10000,
+                              reference_bundle_path = file.path(
+                                Methylome.Plants_path,
+                                'reference_bundles/arabidopsis_thaliana_TAIR10.yaml'
+                              )) {
   ###########################################################################
 
   start_time <- Sys.time()
   time_msg <<- function(suffix = "\t") paste0(format(Sys.time(), "[%H:%M]"), suffix)
   sep_cat <- function(x, short = F) paste0("\n---- ", x, " ", paste(rep("-", ifelse(short, 20, 50) - nchar(x)), collapse = ""), "\n")
-  scripts_dir <- paste0(Methylome.At_path, "/scripts")
+  scripts_dir <- paste0(Methylome.Plants_path, "/scripts")
+  # Shared scripts are loaded before the reference bundle is resolved.
 
   # source all R scripts
   script_files <- list.files(scripts_dir, pattern = "\\.R$", full.names = TRUE)
   script_files <- script_files[!grepl("install_R_packages\\.R$", script_files)]
-  script_files <- script_files[!grepl("Methylome\\.At_run\\.R$", script_files)]
-  script_files <- script_files[!grepl("Methylome\\.At_main\\.R$", script_files)]
+  script_files <- script_files[!grepl("Methylome\\.(At|Plants)_run\\.R$", script_files)]
+  script_files <- script_files[!grepl("Methylome\\.(At|Plants)_main\\.R$", script_files)]
   script_files <- script_files[!grepl("MetaPlots_run\\.R$", script_files)]
   script_files <- script_files[!grepl("mean_deltaH_CX\\.R", script_files)] # have match functions with 'ChrPlots' functions
   script_files <- script_files[!grepl("ChrPlots_", script_files)]
@@ -54,75 +59,62 @@ Methylome.At_main <- function(var1, # control
 
   invisible(lapply(script_files, source))
 
+  reference_bundle <- read_reference_bundle(reference_bundle_path)
+  capabilities <- bundle_capabilities(reference_bundle)
+  message(time_msg(), 'reference: ', reference_bundle_summary(reference_bundle))
+  gene_sets_adapter <- bundle_get(reference_bundle, 'functional.gene_sets_adapter')
+  if (!is.null(gene_sets_adapter)) source(gene_sets_adapter)
+
+  # Explicit resource paths override the bundle.
+  if (is.null(annotation_file) || !nzchar(annotation_file)) {
+    annotation_file <- bundle_get(reference_bundle, 'annotation.genes', annotation_file)
+  }
+  if (is.null(description_file) || !nzchar(description_file)) {
+    description_file <- bundle_get(reference_bundle, 'annotation.descriptions', description_file)
+  }
+  if (is.null(TEs_file) || !nzchar(TEs_file)) {
+    TEs_file <- bundle_get(reference_bundle, 'annotation.transposable_elements', TEs_file)
+  }
+
   ###########################################################################
 
   formals(img_device)$img_type <<- img_type
 
   ###########################################################################
 
-  setwd(Methylome.At_path)
+  setwd(Methylome.Plants_path)
 
   ##### read annotation and description files #####
   cat("\rload annotations and description files [0/3]")
 
-  # annotation file
-  tryCatch(
-    {
-      # if its 'csv' file
-      if (grepl("\\.csv$|\\.csv\\.gz$", annotation_file)) {
-        annotation.gr <- read.csv(annotation_file) %>%
-          makeGRangesFromDataFrame(., keep.extra.columns = T) %>%
-          trimm_and_rename()
-        # if its 'gtf'/'gff'/'gff3' file
-      } else if (grepl("\\.gtf$|\\.gff$|\\.gff3$|\\.gtf\\.gz$|\\.gff\\.gz$|\\.gff3\\.gz$", tolower(annotation_file))) {
-        annotation.gr <- import.gff3(annotation_file) %>%
-          trimm_and_rename()
-      }
-      message(time_msg(), "load annotation file")
-    },
-    error = function(cond) {
-      cat("\n*\n load annotation file:\n", as.character(cond), "*\n")
-      message(time_msg(), "load 'annotation' file: fail")
-    }
-  )
+  annotation.gr <- read_gene_annotation(annotation_file, reference_bundle) %>%
+    harmonize_seqlevels(reference_bundle)
+  message(time_msg(), if (length(annotation.gr)) "loaded gene annotation" else "gene annotation: not configured")
   cat("\rload annotations and description files [1/3]")
 
-  # TAIR10 Transposable Elements file
-  tryCatch(
-    {
-      TE_file.df <- read.csv(TEs_file, sep = "\t")
-      TE_gr <- edit_TE_file(TE_file.df)
-      message(time_msg(), "load Transposable Elements file")
-    },
-    error = function(cond) {
-      cat("\n*\n load TE file:\n", as.character(cond), "*\n")
-      message(time_msg(), "load Transposable Elements file: fail")
-    }
-  )
+  TE_gr <- read_te_annotation(TEs_file, reference_bundle) %>%
+    harmonize_seqlevels(reference_bundle)
+  message(time_msg(), if (length(TE_gr)) "loaded Transposable Elements annotation" else "Transposable Elements annotation: not configured")
   cat("\rload annotations and description files [2/3]")
 
-  # upload description file
-  tryCatch(
-    {
-      des_file_sep <- ifelse(grepl("\\.csv$|\\.csv\\.gz$", description_file), ",", "\t")
-      description_df <- read.csv(description_file, sep = des_file_sep)
-      names(description_df)[1] <- "gene_id"
-      message(time_msg(), "load description file\n")
-    },
-    error = function(cond) {
-      cat("\n*\n load description file:\n", as.character(cond), "*\n")
-      message(time_msg(), "load description file: fail\n")
-    }
-  )
+  description_df <- read_gene_descriptions(description_file, reference_bundle, annotation.gr)
+  capabilities['gene_annotation'] <- length(annotation.gr) > 0L
+  capabilities['transposable_elements'] <- length(TE_gr) > 0L
+  capabilities['descriptions'] <- nrow(description_df) > 0L
+  message(time_msg(), if (nrow(description_df)) "loaded gene descriptions\n" else "gene descriptions: not configured\n")
   cat("\rload annotations and description files [3/3]")
 
   cat("\n\n")
 
   ###########################################################################
-  setwd(Methylome.At_path)
+  setwd(Methylome.Plants_path)
 
   is_single <- (length(var1_path) == 1 & length(var2_path) == 1) # both genotypes includes 1 sample
   is_Replicates <- (length(var1_path) > 1 & length(var2_path) > 1) # both genotypes includes >1 samples
+
+  comparison_name <- paste0(var2, "_vs_", var1)
+  exp_path <- file.path(Methylome.Plants_path, "results", comparison_name)
+  dir.create(exp_path, recursive = TRUE, showWarnings = FALSE)
 
   var_args <- list(
     list(path = var1_path, name = var1),
@@ -131,8 +123,7 @@ Methylome.At_main <- function(var1, # control
 
   ##### load methylation data ('CX_report' file) #####
   message(time_msg(), "load CX methylation data")
-  tryCatch(
-    {
+  tryCatch({
       # load 'CX_reports'
       n.cores.load <- ifelse(n.cores > 1, 2, 1)
       load_vars <- mclapply(var_args, function(x) {
@@ -142,11 +133,13 @@ Methylome.At_main <- function(var1, # control
       mc.cores = n.cores.load
       )
 
-      # trimm seqs objects (rename if not 'TAIR10' Chr seqnames)
-      meth_var1 <- trimm_and_rename(load_vars[[1]]$methylationData_pool)
-      meth_var2 <- trimm_and_rename(load_vars[[2]]$methylationData_pool)
-      meth_var1_replicates <- trimm_and_rename(load_vars[[1]]$methylationDataReplicates)
-      meth_var2_replicates <- trimm_and_rename(load_vars[[2]]$methylationDataReplicates)
+      # Harmonize every genomic object against the same assembly contract.
+      meth_var1 <- harmonize_seqlevels(load_vars[[1]]$methylationData_pool, reference_bundle)
+      meth_var2 <- harmonize_seqlevels(load_vars[[2]]$methylationData_pool, reference_bundle)
+      meth_var1_replicates <- harmonize_seqlevels(load_vars[[1]]$methylationDataReplicates, reference_bundle)
+      meth_var2_replicates <- harmonize_seqlevels(load_vars[[2]]$methylationDataReplicates, reference_bundle)
+      validate_reference_inputs(meth_var1, annotation.gr, TE_gr, reference_bundle)
+      validate_reference_inputs(meth_var2, annotation.gr, TE_gr, reference_bundle)
       cat("\nPooled ", var1, " object for example:\n\n", sep = "")
       capture.output(print(meth_var1), file = NULL)[-c(1, 16)] %>% cat(sep = "\n")
       cat(paste(" seq-levels:", paste(seqlevels(meth_var1), collapse = " ")), "\n\n")
@@ -166,18 +159,12 @@ Methylome.At_main <- function(var1, # control
         )
         message(time_msg(), "load and join single-samples data: successfully")
       }
-    },
-    error = function(cond) {
-      cat("\n*\n load and join CX methylation data:\n", as.character(cond), "*\n")
-      stop("load and join CX methylation data: fail")
-    }
-  )
+  }, error = function(cond) {
+    cat("\n*\n load and join CX methylation data:\n", as.character(cond), "*\n")
+    stop("load and join CX methylation data: fail")
+  })
 
   ###########################################################################
-
-  # new folders path names
-  comparison_name <- paste0(var2, "_vs_", var1)
-  exp_path <- paste0(Methylome.At_path, "/results/", comparison_name)
 
   qc_dir_path <- paste0(exp_path, "/QC")
 
@@ -201,9 +188,81 @@ Methylome.At_main <- function(var1, # control
   DMV_analysis_path <- paste0(exp_path, "/DMV_analysis")
   metaPlot_path <- paste0(exp_path, "/MetaPlots")
 
-  TAIR10_TFBS_file <- paste0(Methylome.At_path, "/annotation_files/TAIR10_compressed_TFBSs.bed.gz")
+  TFBS_file <- bundle_get(reference_bundle, 'functional.tfbs')
+  centromere_gr <- read_bundle_regions(reference_bundle, 'centromeres')
+  heterochromatin_gr <- read_bundle_regions(reference_bundle, 'heterochromatin')
+  chloroplast_seqlevels <- as.character(bundle_get(reference_bundle, 'genome.chloroplast_seqlevels', character()))
+  conversion_rate_available <- FALSE
+  gene_sets_file <- bundle_get(reference_bundle, 'functional.gene_sets')
+  gene_sets_url <- bundle_get(reference_bundle, 'functional.gene_sets_url')
+  promoter_upstream <- as.integer(bundle_get(reference_bundle, 'annotation.promoter_upstream', 2000L))
+
+  disable_if_missing <- function(enabled, capability, label) {
+    if (isTRUE(enabled) && !isTRUE(capabilities[[capability]])) {
+      message(time_msg(), label, ' disabled: resource is absent from the reference bundle')
+      return(FALSE)
+    }
+    enabled
+  }
+  run_TEs_distance_n_size <- disable_if_missing(run_TEs_distance_n_size, 'transposable_elements', 'TE analysis')
+  run_TE_metaPlots <- disable_if_missing(run_TE_metaPlots, 'transposable_elements', 'TE metaplots')
+  run_TF_motifs <- disable_if_missing(run_TF_motifs, 'tfbs', 'TFBS analysis')
+  run_functional_groups <- disable_if_missing(run_functional_groups, 'functional_groups', 'Functional groups')
+  run_GO_analysis <- disable_if_missing(run_GO_analysis, 'go', 'GO analysis')
+  run_KEGG_pathways <- disable_if_missing(run_KEGG_pathways, 'kegg', 'KEGG analysis')
+  if (length(annotation.gr) == 0L) {
+    run_GeneBody_metaPlots <- FALSE
+    run_GeneFeatures_metaPlots <- FALSE
+    run_functional_groups <- FALSE
+    run_GO_analysis <- FALSE
+    run_KEGG_pathways <- FALSE
+  }
+  if (length(annotation.gr) == 0L && length(TE_gr) == 0L) {
+    total_meth_annotation <- FALSE
+  }
 
   dir.create(exp_path, showWarnings = F)
+  yaml::write_yaml(
+    list(
+      reference_bundle = unclass(reference_bundle),
+      enabled_capabilities = as.list(capabilities),
+      run_configuration = list(
+        samples = list(
+          control = list(name = var1, files = as.character(var1_path)),
+          treatment = list(name = var2, files = as.character(var2_path))
+        ),
+        thresholds = list(
+          min_proportion_difference = stats::setNames(as.list(minProportionDiff), c('CG', 'CHG', 'CHH')),
+          bin_size = binSize,
+          min_cytosines_count = minCytosinesCount,
+          min_reads_per_cytosine = minReadsPerCytosine,
+          p_value_threshold = pValueThreshold
+        ),
+        execution = list(file_type = methyl_files_type, image_type = img_type, cores = n.cores),
+        analyses = list(
+          dmrs = analyze_DMRs,
+          qc = run_QC,
+          pca = run_PCA_plot,
+          total_methylation = run_total_meth_plot,
+          chromosome_methylation = run_CX_Chrplot,
+          te_distance_and_size = run_TEs_distance_n_size,
+          total_methylation_annotations = total_meth_annotation,
+          tf_motifs = run_TF_motifs,
+          functional_groups = run_functional_groups,
+          go = run_GO_analysis,
+          kegg = run_KEGG_pathways,
+          strand_dmrs = analyze_strand_asymmetry_DMRs,
+          dmvs = analyze_DMVs,
+          delta_h = analyze_dH,
+          te_metaplots = run_TE_metaPlots,
+          gene_body_metaplots = run_GeneBody_metaPlots,
+          gene_feature_metaplots = run_GeneFeatures_metaPlots
+        ),
+        metaplots = list(feature_bin_size = gene_features_binSize, random_features = metaPlot.random.genes)
+      )
+    ),
+    file.path(exp_path, 'reference_bundle_resolved.yaml')
+  )
   setwd(exp_path)
 
   ###########################################################################
@@ -215,25 +274,34 @@ Methylome.At_main <- function(var1, # control
     dir.create(qc_dir_path, showWarnings = F)
     setwd(qc_dir_path)
   
-    ##### calculate the conversion rate by the chloroplast chromosome (ChrC)
-    message(time_msg(), "conversion rate (C->T) along the Chloroplast genome:", appendLF = F)
-    cat("\nconversion rate (C->T) along the Chloroplast genome:") # "\n"
-    tryCatch(
-      {
-        message("")
-        conR_var1 <- conversionRate(load_vars[[1]]$methylationDataReplicates, var1)
-        conR_var2 <- conversionRate(load_vars[[2]]$methylationDataReplicates, var2)
-        conR_b <- rbind(conR_var1, conR_var2)
-        write.csv(conR_b, paste0(qc_dir_path, "/conversion_rate.csv"), row.names = F)
-        print(kable(conR_b))
-      },
-      error = function(cond) {
-        cat("\n*\n conversion rate:\n", as.character(cond), "*\n")
-        message("fail")
-        cat(" fail\n")
-      }
-    )
-    message("")
+    ##### calculate conversion rate from configured chloroplast sequences
+    if (isTRUE(capabilities[['chloroplast']])) {
+      message(time_msg(), "conversion rate (C->T) along the Chloroplast genome:", appendLF = F)
+      cat("\nconversion rate (C->T) along the Chloroplast genome:")
+      tryCatch(
+        {
+          message("")
+          conR_var1 <- conversionRate(meth_var1_replicates, var1, chloroplast_seqlevels, bundle_alias_map(reference_bundle))
+          conR_var2 <- conversionRate(meth_var2_replicates, var2, chloroplast_seqlevels, bundle_alias_map(reference_bundle))
+          conR_b <- rbind(conR_var1, conR_var2)
+          if (nrow(conR_b)) {
+            write.csv(conR_b, paste0(qc_dir_path, "/conversion_rate.csv"), row.names = F)
+            print(kable(conR_b))
+            conversion_rate_available <- TRUE
+          } else {
+            message(time_msg(), "conversion rate: skipped (configured chloroplast sequence is absent from the data)")
+          }
+        },
+        error = function(cond) {
+          cat("\n*\n conversion rate:\n", as.character(cond), "*\n")
+          message("fail")
+          cat(" fail\n")
+        }
+      )
+      message("")
+    } else {
+      message(time_msg(), "conversion rate: skipped (no chloroplast sequence configured)")
+    }
 
     ##### sample-level QC plots #####
     cat("\nsample-level QC plots:")
@@ -244,7 +312,9 @@ Methylome.At_main <- function(var1, # control
           meth_var1_replicates, meth_var2_replicates,
           var1, var2, var1_path, var2_path,
           annotation.gr, TE_gr,
-          Methylome.At_path = Methylome.At_path
+          Methylome.Plants_path = Methylome.Plants_path,
+          reference_bundle = reference_bundle,
+          promoter_upstream = promoter_upstream
         )
       },
       error = function(cond) {
@@ -255,7 +325,7 @@ Methylome.At_main <- function(var1, # control
     setwd(exp_path)
   }
 
-  rm(load_vars)
+  if (exists("load_vars", inherits = FALSE)) rm(load_vars)
 
   ###########################################################################
 
@@ -303,7 +373,10 @@ Methylome.At_main <- function(var1, # control
     cat("bar-plots for total methylation levels...")
     tryCatch(
       {
-        total_meth_levels <- total_meth_levels(meth_var1_replicates, meth_var2_replicates, var1, var2)
+        total_meth_levels <- total_meth_levels(
+          meth_var1_replicates, meth_var2_replicates, var1, var2,
+          heterochromatin_ranges = heterochromatin_gr
+        )
         message("done")
         cat(" done\n")
       },
@@ -366,7 +439,10 @@ Methylome.At_main <- function(var1, # control
 
         ## TE methylation levels (delta) and distance from centromer
         cat("TE delta-methylation vs. distance from centromere\n")
-        TE_distance <- distance_from_centromer(TE_context_list, TE_gr, window_size = 1e6)
+        TE_distance <- distance_from_centromer(
+          TE_context_list, TE_gr, centromeres = centromere_gr,
+          window_size = 1e6
+        )
 
         ggsave(
           filename = paste0(TEs_distance_n_size_path, "/TE_centromere_distance_delta.png"),
@@ -396,7 +472,7 @@ Methylome.At_main <- function(var1, # control
     for (cntx_ann in c("CG", "CHG", "CHH")) {
       tryCatch(
         {
-          ann_list <- genome_ann(annotation.gr, TE_gr)
+          ann_list <- genome_ann(annotation.gr, TE_gr, promoter_upstream)
           total_methylation_ann(ann_list, var1, var2, meth_var1, meth_var2, cntx_ann)
           # message("done")
         },
@@ -421,12 +497,18 @@ Methylome.At_main <- function(var1, # control
     message(time_msg(), "generating transcription factors motifs plots")
     tryCatch(
       {
-        suppressWarnings(TF_motifs(methylationDataReplicates_joints, "all", 1e6, NULL, annotation.gr, TAIR10_TFBS_file))
+        suppressWarnings(TF_motifs(
+          methylationDataReplicates_joints, 'all', 1e6, NULL,
+          annotation.gr, TFBS_file,
+          centromeres = centromere_gr,
+          heterochromatin = heterochromatin_gr,
+          reference_bundle = reference_bundle
+        ))
         # message("done")
       },
       error = function(cond) {
         cat("\n*\n Transcription factors motifs plot:\n", as.character(cond), "*\n")
-        message("fail")
+        message(time_msg(), "TF motif analysis failed: ", conditionMessage(cond))
       }
     )
   }
@@ -460,35 +542,23 @@ Methylome.At_main <- function(var1, # control
     ##### Calling DMRs in Replicates #####
     dir.create(DMRs_analysis_path, showWarnings = F)
     setwd(DMRs_analysis_path)
-    DMRs_results <- mclapply(c("CG", "CHG", "CHH"), function(context) {
-      tryCatch(
-        {
-          DMRs_call <- calling_DMRs(
-            methylationDataReplicates_joints, meth_var1, meth_var2,
-            var1, var2, var1_path, var2_path, comparison_name,
-            context, minProportionDiff, binSize, pValueThreshold,
-            minCytosinesCount, minReadsPerCytosine, ifelse(n.cores > 3, n.cores / 3, 1), is_Replicates
-          )
+    dmr_contexts <- c("CG", "CHG", "CHH")
+    DMRs_results <- calling_DMRs_queue(
+      methylationDataReplicates_joints, meth_var1, meth_var2,
+      var1, var2, var1_path, var2_path, comparison_name,
+      dmr_contexts, minProportionDiff, binSize, pValueThreshold,
+      minCytosinesCount, minReadsPerCytosine, n.cores, is_Replicates
+    )
 
-          # quatiles cutoff for dH analysis
-          if (analyze_dH) {
-            DMRs_call <- proportions_cutoff(DMRs_call, meth_var1_replicates, context, q = 0.99)
-          }
-
-          cat(paste0(time_msg(" "), "statistically significant DMRs (", context, "): ", length(DMRs_call), "\n"))
-          message(time_msg(), paste0("statistically significant DMRs (", context, "): ", length(DMRs_call)))
-          # message(time_msg(), paste0("\tDMRs caller in ", context, " context: done"))
-          return(DMRs_call)
-        },
-        error = function(cond) {
-          cat(paste0("\n*\n Calling DMRs in ", context, " context:\n"), as.character(cond), "*\ncontinue without calling DMRs!\n\n")
-          message(time_msg(), "\tCalling DMRs: fail\n")
-          return(NULL)
-        }
-      )
-    }, mc.cores = ifelse(n.cores >= 3, 3, 1))
-
-    names(DMRs_results) <- c("CG", "CHG", "CHH")
+    for (context in dmr_contexts) {
+      if (analyze_dH) {
+        DMRs_results[[context]] <- proportions_cutoff(
+          DMRs_results[[context]], meth_var1_replicates, context, q = 0.99
+        )
+      }
+      cat(paste0(time_msg(" "), "statistically significant DMRs (", context, "): ", length(DMRs_results[[context]]), "\n"))
+      message(time_msg(), "statistically significant DMRs (", context, "): ", length(DMRs_results[[context]]))
+    }
     cat(paste0(time_msg(" "), "done!\n"))
     message("")
 
@@ -563,9 +633,9 @@ Methylome.At_main <- function(var1, # control
       setwd(genome_ann_path)
 
       # genome annotations
-      tryCatch(
+      if (length(annotation.gr) || length(TE_gr)) tryCatch(
         {
-          ann_list <- genome_ann(annotation.gr, TE_gr) # create annotations from annotation file as a list
+          ann_list <- genome_ann(annotation.gr, TE_gr, promoter_upstream) # create annotations from annotation file as a list
           DMRs_ann(ann_list, DMRs_bins, context, description_df) # save tables of annotate DMRs. have to run after 'genome_ann'
           DMRs_ann_plots_list[[context]] <- DMRs_ann_plots(var1, var2, context)
           message(time_msg(paste0("\t", context, ":")), "\tgenome annotations for DMRs: done")
@@ -577,7 +647,7 @@ Methylome.At_main <- function(var1, # control
       )
 
       # additional TE annotations results
-      tryCatch(
+      if (length(TE_gr)) tryCatch(
         {
           te_vs_gene_bar[[context]] <- TE_ann_plots(context, TE_gr)
           TE_Super_Family_Frequency(context, TE_gr)
@@ -595,7 +665,11 @@ Methylome.At_main <- function(var1, # control
       for (cntx_g2b in c("CG", "CHG", "CHH")) {
         suppressWarnings(try(
           {
-            gr_2_bigWig(DMRs_results[[cntx_g2b]], paste0(paste("DMRs", cntx_g2b, comparison_name, sep = "_"), ".bw"))
+            gr_2_bigWig(
+              DMRs_results[[cntx_g2b]],
+              paste0(paste('DMRs', cntx_g2b, comparison_name, sep = '_'), '.bw'),
+              reference_bundle = reference_bundle
+            )
           },
           silent = T
         ))
@@ -638,7 +712,7 @@ Methylome.At_main <- function(var1, # control
     )
 
     # save TE vs gene bar-plot
-    tryCatch(
+    if (length(TE_gr)) tryCatch(
       {
         combined_te_plot <- plot_grid(
           te_vs_gene_bar$CG,
@@ -665,7 +739,7 @@ Methylome.At_main <- function(var1, # control
         setwd(DMRs_analysis_path)
         cat("\ngenerated DMRs density plot for all contexts: ")
         # setwd(ChrPlots_DMRs_path)
-        DMRs_circular_plot(annotation.gr, TE_gr, comparison_name)
+        DMRs_circular_plot(annotation.gr, TE_gr, comparison_name, reference_bundle = reference_bundle)
         cat("done\n")
         message(time_msg(), "generated DMRs density plot for all contexts: done")
       },
@@ -678,11 +752,15 @@ Methylome.At_main <- function(var1, # control
     ###########################################################################
 
     ##### TEs superfamily - curcular plot #####
-    tryCatch(
+    if (length(TE_gr)) tryCatch(
       {
         setwd(genome_ann_path)
         cat("generated DMRs density plots over TEs superfamilies: ")
-        TEs_superfamily_circular_plot(annotation.gr)
+        TEs_superfamily_circular_plot(
+          annotation.gr,
+          centromeres = centromere_gr,
+          heterochromatin = heterochromatin_gr
+        )
         cat("done\n")
         message(time_msg(), "generated DMRs over TEs superfamilies: done")
       },
@@ -706,7 +784,13 @@ Methylome.At_main <- function(var1, # control
         groups_results <- mclapply(c("CG", "CHG", "CHH", "all"), function(cntx.l) {
           tryCatch(
             {
-              DMRs_into_groups(treatment = comparison_name, ann = ann.l, context = cntx.l)
+              DMRs_into_groups(
+                treatment = comparison_name,
+                ann = ann.l,
+                context = cntx.l,
+                datasets_dir = gene_sets_url,
+                gene_sets_path = gene_sets_file
+              )
             },
             error = function(cond) {
               cat("\n*\n Annotate *", cntx.l, "* - *", ann.l, "* DMRs into functional groups:\n", as.character(cond), "*\n")
@@ -744,7 +828,7 @@ Methylome.At_main <- function(var1, # control
           dir.create(GO_path, showWarnings = FALSE)
 
           message(time_msg(), "GO analysis for annotated DMRs...")
-          run_GO(comparison_name, genome_ann_path, GO_path, n.cores)
+          run_GO(comparison_name, genome_ann_path, GO_path, n.cores, reference_bundle)
           message(time_msg(), "GO analysis for annotated DMRs: done\n")
         },
         error = function(cond) {
@@ -763,7 +847,7 @@ Methylome.At_main <- function(var1, # control
           dir.create(KEGG_path, showWarnings = FALSE)
 
           message(time_msg(), "KEGG pathways for annotated DMRs...")
-          run_KEGG(comparison_name, genome_ann_path, KEGG_path, n.cores)
+          run_KEGG(comparison_name, genome_ann_path, KEGG_path, n.cores, reference_bundle)
           message(time_msg(), "KEGG pathways for annotated DMRs: done\n")
         },
         error = function(cond) {
@@ -924,11 +1008,11 @@ Methylome.At_main <- function(var1, # control
         cat(paste0("Generating circular density plot for strands asymmetry focus: "))
 
         # Runs circular plot on the newly classified data
-        try(DMRs_circular_plot(annotation.gr, TE_gr, paste0("plus_strand_", comparison_name)))
-        try(DMRs_circular_plot(annotation.gr, TE_gr, paste0("minus_strand_", comparison_name)))
-        try(DMRs_circular_plot(annotation.gr, TE_gr, paste0("symmetric_strand_", comparison_name)))
-        try(DMRs_circular_plot(annotation.gr, TE_gr, paste0("hemi_strand_", comparison_name)))
-        try(DMRs_circular_plot(annotation.gr, TE_gr, paste0("conflicting_strand_", comparison_name)))
+        try(DMRs_circular_plot(annotation.gr, TE_gr, paste0("plus_strand_", comparison_name), reference_bundle = reference_bundle))
+        try(DMRs_circular_plot(annotation.gr, TE_gr, paste0("minus_strand_", comparison_name), reference_bundle = reference_bundle))
+        try(DMRs_circular_plot(annotation.gr, TE_gr, paste0("symmetric_strand_", comparison_name), reference_bundle = reference_bundle))
+        try(DMRs_circular_plot(annotation.gr, TE_gr, paste0("hemi_strand_", comparison_name), reference_bundle = reference_bundle))
+        try(DMRs_circular_plot(annotation.gr, TE_gr, paste0("conflicting_strand_", comparison_name), reference_bundle = reference_bundle))
 
         cat("done\n")
         message(time_msg(), "Circular plot for Strand-Asymmetry Profiling: done")
@@ -981,7 +1065,11 @@ Methylome.At_main <- function(var1, # control
     for (cntx_g2b in c("CG", "CHG", "CHH")) {
       suppressWarnings(try(
         {
-          gr_2_bigWig(DMVs_results[[cntx_g2b]], paste0(DMV_analysis_path, paste("/DMVs", cntx_g2b, comparison_name, sep = "_"), ".bw"))
+          gr_2_bigWig(
+            DMVs_results[[cntx_g2b]],
+            paste0(DMV_analysis_path, paste('/DMVs', cntx_g2b, comparison_name, sep = '_'), '.bw'),
+            reference_bundle = reference_bundle
+          )
           message(time_msg(), "saved all DMRs also as bigWig files\n")
           cat("saved all DMVs also as bigWig files\n")
         },
@@ -1002,28 +1090,28 @@ Methylome.At_main <- function(var1, # control
     dir.create(metaPlot_path, showWarnings = F)
 
     # calculate metaPlot for genes bodies
-    if (run_TE_metaPlots) {
+    if (run_GeneBody_metaPlots) {
       tryCatch(
         {
           message(time_msg(), "generate metaPlot from ", metaPlot.random.genes, " protein-coding Genes")
           setwd(metaPlot_path)
-          Genes_metaPlot(meth_var1, meth_var2, var1, var2, annotation.gr, metaPlot.random.genes, minReadsPerCytosine, n.cores, is_TE = F)
+          Genes_metaPlot(meth_var1, meth_var2, var1, var2, annotation.gr, metaPlot.random.genes, minReadsPerCytosine, is_TE = F)
           setwd(metaPlot_path)
           delta_metaplot("Genes", var1, var2)
         },
         error = function(cond) {
-          cat("\n*\n TEs metaPlots:\n", as.character(cond), "*\n")
+          cat("\n*\n Gene body metaPlots:\n", as.character(cond), "*\n")
         }
       )
     }
 
     # calculate metaPlot for TEs
-    if (run_GeneBody_metaPlots) {
+    if (run_TE_metaPlots) {
       tryCatch(
         {
           message(time_msg(), "generate metaPlot from ", metaPlot.random.genes, " Transposable Elements")
           setwd(metaPlot_path)
-          Genes_metaPlot(meth_var1, meth_var2, var1, var2, TE_gr, metaPlot.random.genes, minReadsPerCytosine, n.cores, is_TE = T)
+          Genes_metaPlot(meth_var1, meth_var2, var1, var2, TE_gr, metaPlot.random.genes, minReadsPerCytosine, is_TE = T)
           setwd(metaPlot_path)
           delta_metaplot("TEs", var1, var2)
         },
@@ -1039,7 +1127,7 @@ Methylome.At_main <- function(var1, # control
         {
           message(time_msg(), "generate metaPlot from ", metaPlot.random.genes, " protein-coding Gene Features")
           setwd(metaPlot_path)
-          Genes_features_metaPlot(meth_var1, meth_var2, var1, var2, annotation.gr, metaPlot.random.genes, minReadsPerCytosine, gene_features_binSize, n.cores)
+          Genes_features_metaPlot(meth_var1, meth_var2, var1, var2, annotation.gr, metaPlot.random.genes, minReadsPerCytosine, gene_features_binSize, promoter_upstream)
           # delta_metaplot("Gene_features", var1, var2, is_geneFeature = TRUE)
         },
         error = function(cond) {
@@ -1058,16 +1146,21 @@ Methylome.At_main <- function(var1, # control
     try({
       suppressWarnings({
         rmarkdown::render(
-          file.path(scripts_dir, "/Methylome.At_report.Rmd"),
+          file.path(scripts_dir, "/Methylome.Plants_report.Rmd"),
           params = list(
             var1 = var1,
             var2 = var2,
             var1_path = var1_path,
             var2_path = var2_path,
-            Methylome.At_path = Methylome.At_path,
+            Methylome.Plants_path = Methylome.Plants_path,
             annotation_file = annotation_file,
             description_file = description_file,
             TEs_file = TEs_file,
+            reference_bundle_path = reference_bundle_path,
+            species_name = bundle_get(reference_bundle, 'species.display_name', bundle_get(reference_bundle, 'species.id', 'Plant')),
+            assembly_name = bundle_get(reference_bundle, 'species.assembly', 'custom'),
+            has_conversion_rate = conversion_rate_available,
+            has_transposable_elements = isTRUE(capabilities[['transposable_elements']]),
             minProportionDiff = minProportionDiff,
             binSize = binSize,
             minCytosinesCount = minCytosinesCount,
@@ -1077,6 +1170,7 @@ Methylome.At_main <- function(var1, # control
             img_type = img_type,
             n.cores = n.cores,
             analyze_DMRs = analyze_DMRs,
+            run_QC = run_QC,
             run_PCA_plot = run_PCA_plot,
             run_total_meth_plot = run_total_meth_plot,
             run_CX_Chrplot = run_CX_Chrplot,
@@ -1112,7 +1206,7 @@ Methylome.At_main <- function(var1, # control
 
   ###########################################################################
 
-  setwd(Methylome.At_path)
+  setwd(Methylome.Plants_path)
   message(paste0("**\t", var2, " vs ", var1, ": done\n"))
   cat("\n", rep("-", 56), sep = "")
 

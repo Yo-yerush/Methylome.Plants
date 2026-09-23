@@ -1,11 +1,16 @@
-# Methylome.At
+# Methylome.Plants
 
-Methylome.At is a comprehensive, R-based pipeline for *Arabidopsis thaliana* that processes post-alignment **WGBS** or **Nanopore** sequencing data for CG, CHG and CHH DNA methylation contexts, identifies differentially methylated regions (DMRs, using [DMRcaller](https://github.com/nrzabet/DMRcaller) package) to replicates/single samples data, integrates multiple genomic resources for functional interpretation, and generates extensive visualizations and annotations to advance understanding of plant epigenetic regulation.
-
-Yerushalmy, Y., & Amir, R. (2026). *Methylome.At: A Comprehensive Pipeline for Arabidopsis Whole-Genome Methylome Analysis*, (Version 0.9.0). Zenodo. [doi.org/10.5281/zenodo.21644722](https://doi.org/10.5281/zenodo.21644722)
+Methylome.Plants is a reference-bundle-driven R pipeline for plant **WGBS** and **Nanopore** methylation data. It processes CG, CHG and CHH contexts, identifies differentially methylated regions (DMRs, using [DMRcaller](https://github.com/nrzabet/DMRcaller)), integrates assembly-matched genomic resources, and generates visualizations and annotations. A TAIR10 bundle is included as the default; additional plants are supported by supplying a species/assembly reference bundle.
 
 ---
 
+**Citation**
+
+If you use Methylome.Plants, please cite:
+
+Yerushalmy, Y., & Amir, R. (2026). *Methylome.Plants: A Comprehensive Pipeline for Plant Whole-Genome Methylome Analysis*, (Version 0.9.1). Zenodo. [doi.org/10.5281/zenodo.21808728](https://doi.org/10.5281/zenodo.21808728)
+
+---
 ```mermaid
 %%{init: {'theme':'redux-dark', 'themeVariables': { 'fontFamily':'Georgia, Times New Roman, serif', 'fontSize':'60px'}, 'flowchart': {'nodeSpacing':15, 'rankSpacing': 15}}}%%
 
@@ -170,8 +175,8 @@ For each contrast (treatment vs control), the main workflow can generate:
 ### Conda (recommended)
 
 - Linux environment (WSL works)
-- [Conda / Miniconda](https://docs.conda.io/en/latest/miniconda.html) ([download](https://repo.anaconda.com/archive/Anaconda3-2024.10-1-Linux-x86_64.sh)) 
-- [`whiptail`](https://linux.die.net/man/1/whiptail) (for UI tutorial) (UI mode)
+- [Anaconda / Miniconda](https://docs.conda.io/en/latest/miniconda.html) ([download](https://repo.anaconda.com/archive/Anaconda3-2026.07-1-Linux-aarch64.sh)) 
+- [`whiptail`](https://linux.die.net/man/1/whiptail) (UI mode)
 
 ### Local R environment
 
@@ -199,10 +204,14 @@ rtracklayer
 topGO
 KEGGREST
 Rgraphviz
-org.At.tair.db
+yaml
 GenomicFeatures
 plyranges
+AnnotationDbi
+Biostrings
 ```
+
+`org.At.tair.db` is optional and is needed only when the TAIR10 bundle's GO/KEGG analyses are requested. Other bundles can declare their own organism annotation package; the UI can install a selected package after confirmation.
 
 ---
 
@@ -211,8 +220,8 @@ plyranges
 ### 1) Download the source code
 
 ```bash
-git clone https://github.com/Yo-yerush/Methylome.At.git
-cd ./Methylome.At
+git clone https://github.com/Yo-yerush/Methylome.Plants.git
+cd ./Methylome.Plants
 ```
 
 ### 2) Setup the conda environment
@@ -234,13 +243,13 @@ chmod +x ./setup_env.sh
 ```bash
 packages=("r-curl" "r-rcurl" "zlib" "r-textshaping" "harfbuzz" "fribidi" "freetype" "libpng" "pkg-config" "libxml2" "r-xml" "bioconductor-rsamtools" "r-svglite") 
 
-conda create --name Methylome.At_env
-conda activate Methylome.At_env
+conda create --name Methylome.Plants_env
+conda activate Methylome.Plants_env
 conda install -c conda-forge -c bioconda r-base=4.4.2 ${packages[@]}
 
 Rscript scripts/install_R_packages.R
 
-chmod +x ./Methylome.At_UI.sh
+chmod +x ./Methylome.Plants_UI.sh
 chmod +x ./scripts/*.At.sh
 ```
 
@@ -273,7 +282,7 @@ mto1    /data/mto1_rep3.CX_report.txt
 
 ### 2) Supported methylation call formats
 
-Methylome.At supports:
+Methylome.Plants supports:
 
 - **Bismark `CX_report`** (WGBS)
 - **Nanopore `bedMethyl`** (recommended to generate using a plant-aware caller such as deepsignal-plant; trinucleotide column is optional)
@@ -309,42 +318,71 @@ You can either:
 ./scripts/bedmethyl_2_cx.sh -i /path/to/input.bed -t /path/to/genome_dir/ -o output_prefix
 ```
 * *genome file as `.fasta` or `.fa`*
-* *trinucleotide context are **not required** for `Methylome.At` pipeline*
+* *trinucleotide context are **not required** for `Methylome.Plants` pipeline*
   
-### 3) Annotation and description files
+### 3) Species and assembly reference bundles
 
-By default, Methylome.At expects:
+All assembly-specific resources are declared in one YAML file. The default is `reference_bundles/arabidopsis_thaliana_TAIR10.yaml`.
+Use `reference_bundles/template.yaml` and follow `reference_bundles/README.md` to add an assembly without changing shared analysis scripts.
+
+Run another plant with:
+
+```bash
+./scripts/Methylome.Plants.sh samples.txt \
+  --reference_bundle /path/to/species_assembly.yaml
+```
+
+A bundle declares chromosome sizes, sequence-name aliases, primary chromosomes and optional resources such as gene annotation, descriptions, TEs, organelles, centromeres, heterochromatin, TFBS, GO, KEGG and gene sets. Paths are resolved relative to the YAML file.
+
+Gene annotations are normalized internally to `seqnames`, `start`, `end`, `strand`, `type`, `gene_id`, `transcript_id` and `gene_model_type`. GFF3, GTF and CSV are supported. Generic TE annotations can be BED, GFF3/GTF, CSV or TSV and should provide explicit coordinates plus a TE ID; family fields are optional.
+
+Sequence names are never guessed or silently changed. Put every required alias in a two-column table (`alias`, `canonical`). Inputs with no shared sequence levels, ambiguous aliases, or out-of-bounds coordinates fail during preflight.
+
+### Legacy per-file overrides
+
+The older command-line overrides remain available for:
 - a genome annotation file or table (`gtf`/`gff`/`gff3`/`csv`)
 - a gene description table (adds functional descriptions to outputs)
-- a TE annotation file (TAIR10 “Transposable Elements” style)
+- a TE annotation file (prefer BED/GFF or normalized CSV/TSV)
 
-If you provide custom files, ensure they contain the columns required by the annotation scripts.
-(If you are unsure, start with the default files shipped in `annotation_files/` and only then replace them.)
+Bundle configuration is preferred because it keeps these files tied to the correct assembly and sequence alias map.
 
 ---
 
-## Running Methylome.At
+## Running Methylome.Plants
 
 ### UI mode
 
 ```bash
-./Methylome.At_UI.sh
+./Methylome.Plants_UI.sh
 ```
+
+The UI opens a plant-reference setup before the analysis options. Choose one of:
+
+- **Reference wizard** — select an organism, assembly and GTF/GFF3, then add only the optional resources you have.
+- **Existing bundle** — reuse a previously generated or manually maintained YAML bundle.
+- **TAIR10** — use the bundled Arabidopsis reference.
+
+The wizard treats GO and KEGG as independent organism selections. For GO it searches installed and available Bioconductor `OrgDb` packages, offers installation after confirmation, and tests every supported key type against gene IDs from the annotation. For KEGG it retrieves a searchable organism/code list and caches it locally.
+
+Exact chromosome lengths can come from a FASTA, `.fai`, chromosome-size table, or a selected `OrgDb` package that exposes `CHRLENGTHS`. If exact lengths are unavailable, the core pipeline can run with observed genomic ranges and reports that limitation. TE, gbM, descriptions, centromeres, heterochromatin, TFBS, gene-to-GO, gene sets, KEGG ID mappings and sequence aliases are all optional.
+
+Successful wizard configurations are saved under `reference_bundles/generated/` by default and are passed to the pipeline exactly like a manual bundle.
 
 ### Manual mode
 
 #### Main pipeline
 
 ```bash
-./scripts/Methylome.At.sh /path/to/samples_table.txt
+./scripts/Methylome.Plants.sh /path/to/samples_table.txt
 ```
 
 #### Usage:
 
 ```text
-$ ./scripts/Methylome.At.sh --help
+$ ./scripts/Methylome.Plants.sh --help
 
-Usage: ./scripts/Methylome.At.sh [samples_file] [options]
+Usage: ./scripts/Methylome.Plants.sh [samples_file] [options]
 
 Required argument:
   --samples_file                Path to samples file [required]
@@ -354,10 +392,12 @@ Optional arguments:
   --n_cores                     Number of cores [default: 8]
   --image_type                  Output images format [default: 'pdf']
   --file_type                   Post-alignment file type - 'CX_report', 'bedMethyl' and 'CGmap' [default: 'CX_report' OR determine automatically]
-  --annotation_file             Genome Annotation file [default: Methylome.At annotations file (TAIR10 based)]
-  --description_file            Description file [default: Methylome.At description file]
-  --TEs_file                    Transposable Elements file [default: TAIR10 'Transposable Elements' annotations]
-  --Methylome_At_path           Path to Methylome.At [default: /home/yoyerush]
+  --annotation_file             Override the bundle gene annotation
+  --description_file            Override the bundle gene-description table
+  --TEs_file                    Override the bundle TE annotation
+  --reference_bundle            Species/assembly reference bundle YAML [default: bundled TAIR10 profile]
+  --pipeline_path               Path to Methylome.Plants [default: current directory]
+  --Methylome_At_path           Deprecated alias for --pipeline_path
 
 DMRs analysis arguments:
   --minProportionDiff_CG        Minimum proportion difference for CG [default: 0.4]
@@ -392,6 +432,31 @@ MetaPlots analysis arguments:
   --MP_features_bin_size        Bin-size (set only for 'Gene_features' analysis!) [default: 10]
   --metaPlot_random             Number of random genes/TEs for metaPlots. 'all' for all the coding-genes and TEs [default: 10000]
 ```
+
+### Core allocation
+
+`--n_cores` is an upper limit, not a guarantee that every requested core will be
+active. The main DMR workflow creates one independent task for each combination
+of primary chromosome and methylation context (`CG`, `CHG`, and `CHH`). Each
+task uses one DMRcaller core so that increasing `--n_cores` cannot change the
+100-bp bin grid or the resulting DMRs.
+
+The maximum useful core count for the main DMR calling step is therefore:
+
+```text
+3 methylation contexts x number of primary chromosomes
+```
+
+| Reference | Primary chromosomes | Maximum concurrent DMR tasks | Suggested `--n_cores` |
+|---|---:|---:|---:|
+| *Arabidopsis thaliana* TAIR10 | 5 | 15 | 15 |
+| *Oryza sativa* (rice) | 12 | 36 | 36 |
+
+For example, requesting 60 cores for Arabidopsis still runs at most 15 main DMR
+tasks concurrently. Other stages generally have lower limits: chromosome
+sub-context plots can use up to 27 workers, GO/KEGG analyses up to 18 when
+enabled, and functional-group annotation up to 4. The current metaplot
+implementations are vectorized/Rcpp-based and do not use additional workers.
 
 ---
 
@@ -447,9 +512,9 @@ When the pipeline finishes, it automatically produces a `<contrast>_report.html`
 Render it manually:
 ```r
 rmarkdown::render(
-  "scripts/Methylome.At_report.Rmd",
+  "scripts/Methylome.Plants_report.Rmd",
   params = list(var1 = "wt", var2 = "mt1",
-                Methylome.At_path = "."),
+                Methylome.Plants_path = "."),
   output_file = "mt1_vs_wt_report.html"
 )
 ```
@@ -464,17 +529,17 @@ $ ./scripts/run_bismark.sh --help
 
 Usage:
 ------
-run_bismark.sh [-s <required>] [-g TAIR10] [options]
+run_bismark.sh -s <samples.tsv> -g <reference.fa> [options]
 
 Options:
 --------
 -s, --samples   Tab-delimited two-column file: sample-name <TAB> fastq-path
--g, --genome    FASTA of the reference genome [default: TAIR10]
+-g, --genome    FASTA of the reference genome [required]; use TAIR10 for the built-in Arabidopsis download
 -o, --outdir    Output directory [default: ./bismark_results]
 -n, --ncores    Number of cores (max). multiples of 4 recommended [default: 8]
 -m, --mem       Buffer size for 'bismark_methylation_extractor' [default: 8G]
 --cx            Produce and keep only '_CX_report.txt.gz' file
---mat           Produce samples table (.txt) for 'Methylome.At' pipeline
+--mat           Produce samples table (.txt) for 'Methylome.Plants' pipeline
 --indx          Keep the genome index directory (applies only if --cx is on)
 --sort          Sort & index BAM files (applies only if --cx is off)
 --strand        Keep top/bottom strand (OT/OB) files [remove in default]
@@ -508,12 +573,13 @@ wt_2    PATH/TO/FILE/wt2_R2.fastq
 
 #### Run
 
-- *Use `-g TAIR10` for the standart reference genome of Arabidopsis (auto-download FASTA)*
-- *Add `--mat` to create a ready-to-use samples table for Methylome.At*
+- *Use `-g TAIR10` for the standard Arabidopsis reference genome (auto-download FASTA)*
+- *For another plant, pass the FASTA from the same assembly declared by the analysis reference bundle.*
+- *Add `--mat` to create a ready-to-use samples table for Methylome.Plants*
 - *Add `--cx` to produce and Keep only `*_CX_report.txt.gz` files*
 
 ```bash
-./scripts/run_bismark.sh -s samples_table.txt -g TAIR10 -n 8 --cx --mat
+./scripts/run_bismark.sh -s samples_table.txt -g /references/species_assembly.fa -n 8 --cx --mat
 ```
 
 ---
@@ -526,6 +592,19 @@ wt_2    PATH/TO/FILE/wt2_R2.fastq
 
 ---
 
+## Reference-bundle smoke test
+
+After installing the R dependencies, validate the generic bundle and coordinate adapters with:
+
+```bash
+Rscript scripts/test_scripts/reference_bundle_smoke.R
+Rscript scripts/test_scripts/reference_wizard_smoke.R
+```
+
+The fixtures intentionally use non-`Chr` sequence names, GFF3 `ID`/`Parent` ancestry, non-TAIR gene/TE columns, optional missing chromosome lengths, FASTA-index lengths, and an intentionally mismatched assembly-size failure.
+
+---
+
 ## License
 
-This project is licensed under the [MIT License](https://github.com/Yo-yerush/Methylome.At/blob/main/LICENSE).
+This project is licensed under the [MIT License](https://github.com/Yo-yerush/Methylome.Plants/blob/main/LICENSE).

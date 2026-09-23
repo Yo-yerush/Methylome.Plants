@@ -1,20 +1,12 @@
-total_meth_levels <- function(rep_var1, rep_var2, var1, var2) {
-  
-  # heterochromatin as GRanges object
-  # Bi et al., Genome Research (2017)
-  # http://www.genome.org/cgi/doi/10.1101/gr.215186.116.
-  heterochromatin_ranges <- GRanges(
-    seqnames = rep_var1@seqnames@values,
-    ranges = IRanges(
-      start = c(11.5, 1.1, 10.3, 1.5, 9) * 1e6,
-      end = c(17.7, 7.2, 17.3, 6.3, 16) * 1e6
-    )
-  )
-  # Subset the GRanges object to keep only hetero/eu chromatin
-  hetero.chromatin_ranges_var1 <- subsetByOverlaps(rep_var1, heterochromatin_ranges)
-  hetero.chromatin_ranges_var2 <- subsetByOverlaps(rep_var2, heterochromatin_ranges)
-  eu.chromatin_ranges_var1 <- subsetByOverlaps(rep_var1, heterochromatin_ranges, invert = T)
-  eu.chromatin_ranges_var2 <- subsetByOverlaps(rep_var2, heterochromatin_ranges, invert = T)
+total_meth_levels <- function(rep_var1, rep_var2, var1, var2,
+                              heterochromatin_ranges = GRanges()) {
+  has_structural_regions <- length(heterochromatin_ranges) > 0L
+  if (has_structural_regions) {
+    hetero.chromatin_ranges_var1 <- subsetByOverlaps(rep_var1, heterochromatin_ranges)
+    hetero.chromatin_ranges_var2 <- subsetByOverlaps(rep_var2, heterochromatin_ranges)
+    eu.chromatin_ranges_var1 <- subsetByOverlaps(rep_var1, heterochromatin_ranges, invert = TRUE)
+    eu.chromatin_ranges_var2 <- subsetByOverlaps(rep_var2, heterochromatin_ranges, invert = TRUE)
+  }
   
   #############################################################
 
@@ -109,9 +101,10 @@ total_meth_levels_fun <- function(rep_var1_f, rep_var2_f, var1_f, var2_f, plot_t
 total_meth_levels_fun(rep_var1, rep_var2, var1, var2, "Whole_Genome") # all genom
 cat(".")
 
-total_meth_levels_fun(hetero.chromatin_ranges_var1, hetero.chromatin_ranges_var2, var1, var2, "Heterochromatin_region") # heterochromatin
-cat(".")
-
-total_meth_levels_fun(eu.chromatin_ranges_var1, eu.chromatin_ranges_var2, var1, var2, "Euchromatin_region") # euchromatin
-cat(".")
+if (has_structural_regions) {
+  total_meth_levels_fun(hetero.chromatin_ranges_var1, hetero.chromatin_ranges_var2, var1, var2, "Heterochromatin_region")
+  cat(".")
+  total_meth_levels_fun(eu.chromatin_ranges_var1, eu.chromatin_ranges_var2, var1, var2, "Euchromatin_region")
+  cat(".")
+}
 }

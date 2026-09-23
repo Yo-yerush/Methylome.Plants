@@ -1,20 +1,14 @@
-TEs_superfamily_circular_plot <- function(ann.file) {
-    chr_amount <- length(seqnames(ann.file)@values)
+TEs_superfamily_circular_plot <- function(ann.file, centromeres = GRanges(),
+                                          heterochromatin = GRanges()) {
+    chromosomes <- as.character(seqlevels(ann.file))
+    chr_amount <- length(chromosomes)
     genes_type <- ann.file[which(ann.file$type == "gene")]
 
     ############# Heterochromatin positions #############
-    heteroChr <- data.frame(
-        Chr = paste0("Chr", c(1:chr_amount)),
-        start = c(12500000, 1250000, 11000000, 1666667, 9444444),
-        end = c(17500000, 7500000, 16250000, 7000000, 15000000)
-    )
+    heteroChr <- as.data.frame(heterochromatin)[, c('seqnames', 'start', 'end'), drop = FALSE]
 
     ############# Centromere positions #############
-    cenChr <- data.frame(
-        Chr = paste0("Chr", c(1:chr_amount)),
-        start = c(14476796, 3462971, 13780083, 3177188, 11207348),
-        end = c(15081019, 3650512, 14388500, 3248799, 11555278)
-    )
+    cenChr <- as.data.frame(centromeres)[, c('seqnames', 'start', 'end'), drop = FALSE]
 
     #############
 
@@ -28,7 +22,9 @@ TEs_superfamily_circular_plot <- function(ann.file) {
 
     ##########
 
-    family_res_list <- split(all_cntx_gr[, 1:3], all_cntx_gr$Transposon_Super_Family)[order(sapply(split(all_cntx_gr[, 1:3], all_cntx_gr$Transposon_Super_Family), nrow), decreasing = TRUE)][1:7]
+    family_split <- split(all_cntx_gr[, 1:3], all_cntx_gr$Transposon_Super_Family)
+    family_order <- order(sapply(family_split, nrow), decreasing = TRUE)
+    family_res_list <- family_split[family_order[seq_len(min(7L, length(family_order)))]]
     names_2_keep <- names(family_res_list)
     names(family_res_list) <- gsub("LTR/|RC/|^DNA/|/L1$", "", names(family_res_list))
 
@@ -41,24 +37,20 @@ TEs_superfamily_circular_plot <- function(ann.file) {
     par(mar = c(0, 0, 0, 0))
 
     circos.par(gap.degree = c(rep(1, chr_amount - 1), 35), start.degree = 90, points.overflow.warning = FALSE)
-    circos.genomicInitialize(as.data.frame(ann.file)[, 1:3], sector.names = paste0("Chr ", 1:chr_amount), axis.labels.cex = 0.4, labels.cex = 1.25)
+    circos.genomicInitialize(as.data.frame(ann.file)[, 1:3], sector.names = chromosomes, axis.labels.cex = 0.4, labels.cex = 1.25)
     for (family.i in 1:length(family_res_list)) {
         suppressMessages({
             density_data <- genomicDensity(family_res_list[[family.i]], window.size = 1e5, count_by = "number")
             ylims <- range(density_data$value) * 1.435
             circos.genomicTrackPlotRegion(density_data, ylim = range(density_data$value), bg.border = NA, track.height = 0.105, track.margin = c(0, 0), panel.fun = function(region, value, ...) {
-                chr.n <- gsub("Chr", "", get.cell.meta.data("sector.index"))
+                chr.n <- get.cell.meta.data('sector.index')
 
                 ### heterocromatin
-                circos.rect(heteroChr[chr.n, 2], ylims[1], heteroChr[chr.n, 3], ylims[2], # xleft, ybottom, xright, ytop
-                    col = "#fcba0320",
-                    border = NA
-                )
+                h <- heteroChr[heteroChr$seqnames == chr.n, , drop = FALSE]
+                if (nrow(h)) for (j in seq_len(nrow(h))) circos.rect(h$start[j], ylims[1], h$end[j], ylims[2], col = '#fcba0320', border = NA)
                 ### centromere
-                circos.rect(cenChr[chr.n, 2], ylims[1], cenChr[chr.n, 3], ylims[2], # xleft, ybottom, xright, ytop
-                    col = "#fcba0360",
-                    border = NA
-                )
+                cgr <- cenChr[cenChr$seqnames == chr.n, , drop = FALSE]
+                if (nrow(cgr)) for (j in seq_len(nrow(cgr))) circos.rect(cgr$start[j], ylims[1], cgr$end[j], ylims[2], col = '#fcba0360', border = NA)
 
                 ### density lines
                 colors <- ifelse(value >= 15, "#440154",
@@ -78,7 +70,7 @@ TEs_superfamily_circular_plot <- function(ann.file) {
                 )
             })
             ### y-axis labels
-            circos.text("Chr1", x = 0, y = 0.5, labels = paste0(names(family_res_list)[family.i], "  "), facing = "downward", cex = 0.6, adj = c(0.85, -0.15))
+            circos.text(chromosomes[1], x = 0, y = 0.5, labels = paste0(names(family_res_list)[family.i], "  "), facing = "downward", cex = 0.6, adj = c(0.85, -0.15))
         })
     }
     circos.clear()
@@ -114,7 +106,7 @@ TEs_superfamily_circular_plot <- function(ann.file) {
     par(mar = c(0, 0, 0, 0))
 
     circos.par(gap.degree = c(rep(1, chr_amount - 1), 35), start.degree = 90, points.overflow.warning = FALSE)
-    circos.genomicInitialize(as.data.frame(ann.file)[, 1:3], sector.names = paste0("Chr ", 1:chr_amount), axis.labels.cex = 0.4, labels.cex = 1.25)
+    circos.genomicInitialize(as.data.frame(ann.file)[, 1:3], sector.names = chromosomes, axis.labels.cex = 0.4, labels.cex = 1.25)
     for (family.i in 1:length(family_list_gain)) {
         suppressMessages({
             density_gain <- genomicDensity(family_list_gain[[family.i]], window.size = 1e6, count_by = "number") %>%
@@ -138,18 +130,14 @@ TEs_superfamily_circular_plot <- function(ann.file) {
                 ylim = c(0, y_max),
                 bg.border = NA, track.height = 0.105, track.margin = c(0, 0),
                 panel.fun = function(region, value, ...) {
-                    chr.n <- gsub("Chr", "", get.cell.meta.data("sector.index"))
+                    chr.n <- get.cell.meta.data('sector.index')
 
                     ### heterocromatin
-                    circos.rect(heteroChr[chr.n, 2], ylims[1], heteroChr[chr.n, 3], ylims[2],
-                        col = "#fcba0320",
-                        border = NA
-                    )
+                    h <- heteroChr[heteroChr$seqnames == chr.n, , drop = FALSE]
+                    if (nrow(h)) for (j in seq_len(nrow(h))) circos.rect(h$start[j], ylims[1], h$end[j], ylims[2], col = '#fcba0320', border = NA)
                     ### centromere
-                    circos.rect(cenChr[chr.n, 2], ylims[1], cenChr[chr.n, 3], ylims[2],
-                        col = "#fcba0360",
-                        border = NA
-                    )
+                    cgr <- cenChr[cenChr$seqnames == chr.n, , drop = FALSE]
+                    if (nrow(cgr)) for (j in seq_len(nrow(cgr))) circos.rect(cgr$start[j], ylims[1], cgr$end[j], ylims[2], col = '#fcba0360', border = NA)
 
                     ### density lines
                     circos.genomicLines(region, value[, 1], col = "#FF000080", border = TRUE, lty = 1, lwd = 0.5, type = "l", area = T)
@@ -157,7 +145,7 @@ TEs_superfamily_circular_plot <- function(ann.file) {
                 }
             )
             ### y-axis labels
-            circos.text("Chr1", x = 0, y = 0.5, labels = paste0(names(family_list_gain)[family.i], "  "), facing = "downward", cex = 0.6, adj = c(0.85, -0.15))
+            circos.text(chromosomes[1], x = 0, y = 0.5, labels = paste0(names(family_list_gain)[family.i], "  "), facing = "downward", cex = 0.6, adj = c(0.85, -0.15))
         })
     }
     circos.clear()

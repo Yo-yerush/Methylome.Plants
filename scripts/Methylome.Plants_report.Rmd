@@ -14,11 +14,16 @@ params:
   var2: null
   var1_path: null
   var2_path: null
-  Methylome.At_path: "."
+  Methylome.Plants_path: "."
 
-  annotation_file: "./annotation_files/At_custom_annotations.csv.gz"
-  description_file: "./annotation_files/At_custom_annotations.csv.gz"
-  TEs_file: "./annotation_files/At_custom_annotations.csv.gz"
+  annotation_file: null
+  description_file: null
+  TEs_file: null
+  reference_bundle_path: null
+  species_name: "Plant"
+  assembly_name: "custom"
+  has_conversion_rate: false
+  has_transposable_elements: false
 
   minProportionDiff: [0.4, 0.2, 0.1]    # CG, CHG, CHH
   binSize: 100
@@ -87,8 +92,8 @@ stop_if_missing <- function(x, name) {
 stop_if_missing(params$var1, "var1")
 stop_if_missing(params$var2, "var2")
 
-root <- params$Methylome.At_path
-if (!dir.exists(root)) stop("Methylome.At_path does not exist: ", root)
+root <- params$Methylome.Plants_path
+if (!dir.exists(root)) stop("Methylome.Plants_path does not exist: ", root)
 knitr::opts_knit$set(root.dir = root)
 
 comparison_name <- paste0(params$var2, "_vs_", params$var1)
@@ -98,7 +103,7 @@ if (!dir.exists(file.path(root, exp_path)) && !dir.exists(exp_path)) {
   stop("Results folder not found: ", exp_path)
 }
 
-# Output folders (match Methylome.At_main.R)
+# Output folders (match Methylome.Plants_main.R)
 qc_dir_path <- file.path(exp_path, "QC")
 total_meth_path <- file.path(exp_path, "total_methylation_analysis")
 PCA_plots_path <- file.path(total_meth_path, "PCA_plots")
@@ -282,22 +287,26 @@ cat(sprintf('<style>
 </style>', as.integer(params$plot_max_width_px), as.integer(params$plot_max_height_px), as.integer(params$plot_gap_px)))
 ```
 
-[Methylome.At](https://github.com/Yo-yerush/Methylome.At) report. *`r format(Sys.Date(), '%d, %B, %Y')`*
+[Methylome.Plants](https://github.com/Yo-yerush/Methylome.Plants) report. *`r format(Sys.Date(), '%d, %B, %Y')`*
 
 ## `r params$var2` *vs.* `r params$var1` results overview {.tabset}
 
 ### Introduction
 
-This report summarizes the results of the **Methylome.At** pipeline, an automated workflow for analyzing whole-genome bisulfite sequencing (WGBS) data in *Arabidopsis thaliana*. The pipeline performs quality control, computes global and context-specific DNA methylation levels, identifies differentially methylated regions (DMRs), and generates a variety of visualizations and summary tables. It is designed to facilitate reproducible, comprehensive methylome comparisons between experimental conditions or genotypes.
+This report summarizes the results of the **Methylome.Plants** pipeline for **`r params$species_name`** (assembly **`r params$assembly_name`**). The pipeline performs quality control, computes global and context-specific DNA methylation levels, identifies differentially methylated regions (DMRs), and generates visualizations and summary tables for reproducible methylome comparisons.
 
 **Key features of the pipeline:**
 
-- Automated QC and conversion rate estimation
+- Automated QC and conversion rate estimation when an organelle reference is configured
 - Global and per-context methylation profiling
 - Chromosome-scale and annotation-based methylation summaries
 - DMR detection and annotation
 - Visualization of methylation patterns, PCA, and functional group overlaps
 - Optional analyses: motif enrichment, GO/KEGG, meta-plots, and more
+
+**Software citation:**
+
+Yerushalmy, Y., & Amir, R. (2026). *Methylome.Plants: A Comprehensive Pipeline for Plant Whole-Genome Methylome Analysis*, (Version 0.9.1). Zenodo. [doi.org/10.5281/zenodo.21808728](https://doi.org/10.5281/zenodo.21808728)
 
 ---
 
@@ -364,12 +373,10 @@ check(params$analyze_dH)
 **Comparison:** `r params$var2` vs `r params$var1`  
 **Results folder:** `r file.path(root, exp_path)`
 
-#### Conversion rate
-
-Chloroplast DNA is expected to be largely unmethylated. High C→T conversion on ChrC is a practical estimate of bisulfite conversion efficiency.
-
 ```{r conversion-rate, results='asis'}
-safe_section({
+if (isTRUE(params$run_QC) && isTRUE(params$has_conversion_rate)) safe_section({
+  cat("#### Conversion rate\n\n")
+  cat("The configured chloroplast sequence provides an estimate of bisulfite C→T conversion efficiency.\n\n")
   conv_path <- file.path(qc_dir_path, "conversion_rate.csv")
   if (!file.exists(conv_path)) {
     cat(sprintf("_Missing file:_ `%s`_\n\n", conv_path))
@@ -392,7 +399,8 @@ if (isTRUE(params$run_QC) && dir.exists(qc_dir_path)) { safe_section({
   qc_var_path <- file.path(qc_dir_path, "variance")
 
   cat("#### Methylation distributions\n\n")
-  cat("Per-region CG/CHG/CHH methylation distributions for gene bodies, promoters and TEs (control vs treatment).\n\n")
+  distribution_regions <- if (isTRUE(params$has_transposable_elements)) "gene bodies, promoters and TEs" else "gene bodies and promoters"
+  cat(sprintf("Per-region CG/CHG/CHH methylation distributions for %s (control vs treatment).\n\n", distribution_regions))
   if (dir.exists(qc_dist_path)) {
     dist_files <- list_media_files(qc_dist_path, pattern = "QC_meth_distribution_")
     if (length(dist_files) > 0) {
@@ -816,65 +824,81 @@ if (isTRUE(params$analyze_dH)) { safe_section({
 #### Configurations {.tabset}
 
 ```{r params-table, results='asis'}
-pnames3 <- names(params)[1:5]
-pnames2 <- names(params)[8:13]
-pnames1 <- names(params)[c(6:7, 14:length(params))]
-
-vals3 <- vapply(pnames3, function(n) val1(params[[n]]), character(1))
-vals2 <- vapply(pnames2, function(n) val1(params[[n]]), character(1))
-vals1 <- vapply(pnames1, function(n) val1(params[[n]]), character(1))
-
-decrip3 <- c(
-  "Maximum plot width (pixels)",
-  "Maximum plot height (pixels)",
-  "Gap between plots in grids (pixels)",
-  "Default columns for multi-plot sections",
-  "If TRUE: copy plots next to the HTML report"
+data_parameter_names <- intersect(c(
+  'var1_path', 'var2_path', 'Methylome.Plants_path',
+  'annotation_file', 'description_file', 'TEs_file',
+  'reference_bundle_path', 'species_name', 'assembly_name'
+), names(params))
+report_parameter_names <- intersect(c(
+  'plot_max_width_px', 'plot_max_height_px', 'plot_gap_px',
+  'default_plot_cols', 'copy_images_next_to_report'
+), names(params))
+pipeline_parameter_names <- setdiff(
+  names(params), c(data_parameter_names, report_parameter_names)
 )
 
-decrip2 <- c(
-  "Path to first sample methylation file",
-  "Path to second sample methylation file",
-  "Path to Methylome.At project root",
-  "Genome Annotation file",
-  "Description file",
-  "Transposable Elements file"
+parameter_descriptions <- c(
+  var1 = 'First sample name',
+  var2 = 'Second sample name',
+  var1_path = 'Path to first sample methylation file',
+  var2_path = 'Path to second sample methylation file',
+  Methylome.Plants_path = 'Path to the Methylome.Plants project root',
+  annotation_file = 'Resolved genome annotation file',
+  description_file = 'Resolved gene-description file',
+  TEs_file = 'Resolved transposable-element annotation file',
+  reference_bundle_path = 'Species/assembly reference-bundle YAML',
+  species_name = 'Reference organism display name',
+  assembly_name = 'Reference genome assembly',
+  minProportionDiff = 'Minimum proportion difference for CG, CHG and CHH',
+  binSize = 'DMR bin size',
+  minCytosinesCount = 'Minimum cytosines per tested bin',
+  minReadsPerCytosine = 'Minimum reads per cytosine',
+  pValueThreshold = 'Adjusted p-value threshold',
+  methyl_files_type = 'Post-alignment input format',
+  img_type = 'Output image format',
+  n.cores = 'Number of CPU cores',
+  analyze_DMRs = 'Perform the main DMR analysis workflow',
+  run_QC = 'Generate sample-level quality-control plots',
+  run_PCA_plot = 'Perform PCA for total methylation levels',
+  run_total_meth_plot = 'Generate total-methylation bar plots',
+  run_CX_Chrplot = 'Generate chromosome-wide methylation plots',
+  run_TEs_distance_n_size = 'Analyze TE methylation by size and centromere distance',
+  total_meth_annotation = 'Analyze methylation over genomic annotations',
+  run_TF_motifs = 'Analyze transcription-factor binding motifs',
+  run_functional_groups = 'Analyze functional gene groups overlapping DMRs',
+  run_GO_analysis = 'Perform GO enrichment analysis',
+  run_KEGG_pathways = 'Perform KEGG pathway analysis',
+  analyze_strand_asymmetry_DMRs = 'Analyze strand-specific DMRs',
+  analyze_DMVs = 'Analyze differentially methylated valleys',
+  analyze_dH = 'Analyze methylation entropy / surprisal changes',
+  run_TE_metaPlots = 'Generate TE metaplots',
+  run_GeneBody_metaPlots = 'Generate gene-body metaplots',
+  run_GeneFeatures_metaPlots = 'Generate gene-feature metaplots',
+  gene_features_binSize = 'Bin size for gene-feature metaplots',
+  metaPlot.random.genes = 'Number of genes or TEs sampled for metaplots',
+  plot_max_width_px = 'Maximum plot width in pixels',
+  plot_max_height_px = 'Maximum plot height in pixels',
+  plot_gap_px = 'Gap between plots in grids, in pixels',
+  default_plot_cols = 'Default number of columns in plot grids',
+  copy_images_next_to_report = 'Copy plot assets next to the HTML report'
 )
 
-decrip1 <- c(
-  "First sample name",
-  "Second sample name",
-  "Minimum proportion difference for CG, CHG, CHH",
-  "DMRs bin size",
-  "Minimum cytosines count",
-  "Minimum reads per cytosine",
-  "P-value (padj) threshold",
-  "Post-alignment file type ('CX_report', 'bedMethyl', 'CGmap')",
-  "Output images format",
-  "Number of cores",
-  "Perform the main DMRs analysis workflow",
-  "Sample-level QC plots (distribution, scatter, correlation, variance)",
-  "Perform PCA for total methylation levels",
-  "Total methylation bar-plot",
-  "Total methylation chromosome plot",
-  "Analyze TEs total methylation by size and distance from centromere",
-  "Total methylation per genic annotations",
-  "Transcription factors motif analysis",
-  "Functional groups genes overlap DMRs",
-  "Perform GO analysis over DMRs",
-  "Perform KEGG pathways analysis over DMRs",
-  "Analyze strand-specific (+/-) DMRs",
-  "Analyze differentially methylated valleys (1kbp)",
-  "Analyze SurpDMRs (delta-H = -(p * log2(p) + (1 - p) * log2(1 - p)))",
-  "Analyze TEs metaPlots",
-  "Analyze Genes-body metaPlots",
-  "Analyze Gene Features metaPlots",
-  "Bin-size for 'Gene_features' metaPlots",
-  "Number of random genes/TEs for metaPlots ('all' for all coding-genes and TEs)"
-)
-cfg3 <- data.frame(Parameter = pnames3, Value = vals3, Description = decrip3, check.names = FALSE, stringsAsFactors = FALSE)
-cfg2 <- data.frame(Parameter = pnames2, Value = vals2, Description = decrip2, check.names = FALSE, stringsAsFactors = FALSE)
-cfg1 <- data.frame(Parameter = pnames1, Value = vals1, Description = decrip1, check.names = FALSE, stringsAsFactors = FALSE)
+configuration_table <- function(parameter_names) {
+  descriptions <- unname(parameter_descriptions[parameter_names])
+  missing <- is.na(descriptions)
+  descriptions[missing] <- gsub('_', ' ', parameter_names[missing], fixed = TRUE)
+  data.frame(
+    Parameter = parameter_names,
+    Value = vapply(parameter_names, function(n) val1(params[[n]]), character(1)),
+    Description = descriptions,
+    check.names = FALSE,
+    stringsAsFactors = FALSE
+  )
+}
+
+cfg1 <- configuration_table(pipeline_parameter_names)
+cfg2 <- configuration_table(data_parameter_names)
+cfg3 <- configuration_table(report_parameter_names)
 
 rownames(cfg3) <- NULL
 rownames(cfg2) <- NULL
