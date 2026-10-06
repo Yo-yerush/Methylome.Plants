@@ -16,7 +16,6 @@ calling_DMPs <- function(gr, min_cov = 6, fdr = 0.05) {
         fisher.test(matrix(c(v[1], v[2], v[3], v[4]), nrow = 2, byrow = TRUE))$p.value
     })
 
-    gr$direction <- ifelse(gr$delta > 0, "gain", "loss")
 
     if (is.null(fdr)) {
         gr <- gr[which(gr$pvalue <= 0.05)]
@@ -25,5 +24,7 @@ calling_DMPs <- function(gr, min_cov = 6, fdr = 0.05) {
         gr <- gr[which(gr$padj <= fdr)]
     }
 
+    gr$direction <- ifelse(gr$delta > 0, "gain", "loss")
+    
     return(gr)
 }

@@ -42,7 +42,10 @@ run_GO <- function(comparison_name, genome_ann_path, GO_path, n.cores,
               ))
             },
             error = function(cond) {
-              message(paste0("Error in 'top.GO.fun': ", paste(ann_loop, contx_loop, gain_loss_loop, GO_type_loop, sep = "-")))
+              message("Error in 'top.GO.fun': ",
+                      paste(ann_loop, contx_loop, gain_loss_loop, GO_type_loop, sep = "-"),
+                      ": ", conditionMessage(cond))
+              return("failed")
             }
           )
         }
@@ -53,7 +56,10 @@ run_GO <- function(comparison_name, genome_ann_path, GO_path, n.cores,
           # message(paste0("\tdone: ",ann_loop," in ",contx_loop," context\t"))
         },
         error = function(cond) {
-          message(paste0("Error in GO plot: ", paste(ann_loop, contx_loop, sep = "-")))
+          message("Error in GO plot: ",
+                  paste(ann_loop, contx_loop, sep = "-"),
+                  ": ", conditionMessage(cond))
+          return("failed")
         }
       )
     }, mc.cores = n.cores.cntx)
@@ -102,8 +108,11 @@ top.GO.fun = function(treatment,
   all_genes$pValue[is.na(all_genes$pValue)] <- 0.999
   all_genes$pValue[all_genes$pValue == 0] <- 1e-300
   
-  geneList = ifelse(all_genes$pValue < pcutoff, 1, 0)
-  names(geneList) = all_genes$gene_id
+  # geneList = ifelse(all_genes$pValue < pcutoff, 1, 0)
+  # names(geneList) = all_genes$gene_id
+  gene_pvalues <- tapply(all_genes$pValue, all_genes$gene_id, min, na.rm = TRUE)
+  geneList <- as.integer(gene_pvalues < pcutoff)
+  names(geneList) <- names(gene_pvalues)
   
   ############################################################
   #### type Ontology  ####
@@ -257,7 +266,7 @@ GO_one_plot <- function(treatment,
   #print(paste(treatment,context,annotation, sep = "_"))
   
   img_device(paste0(path_for__results,"/",treatment,"_",context,"_",annotation,"_GO"),
-      width = 9.90, h = Height)
+      w = 9.90, h = Height)
   multiplot(bubble_gain, bubble_loss, cols=2)
   dev.off()
 }

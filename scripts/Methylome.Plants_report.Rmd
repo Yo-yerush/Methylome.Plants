@@ -597,7 +597,7 @@ settings <- data.frame(
     "Genome tiling window size used to reduce per-site noise.",
     "Minimum informative cytosines required per bin.",
     "Per-site coverage filter applied before summarizing bins.",
-    "Statistical cutoff for significance (p-value).",
+    "Statistical cutoff for significance (adjusted p-value).",
     "Minimal ΔmC thresholds for CG, CHG and CHH contexts."
   ),
   check.names = FALSE,

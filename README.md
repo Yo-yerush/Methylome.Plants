@@ -168,6 +168,10 @@ For each contrast (treatment vs control), the main workflow can generate:
 - **Analyze differentially methylated vallies (1kbp)**
 - **dH / surprisal module** (deltaH folder with summary plots + annotations)
 
+GO and KEGG retain the lowest DMR p-value per gene within each
+annotation, context, and gain/loss group. GO converts it to a binary
+significance indicator, KEGG uses it in its Wilcoxon test.
+
 ---
 
 ## System requirements
