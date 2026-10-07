@@ -1,5 +1,55 @@
 #!/usr/bin/env bash
 
+###############################################################
+# Tcl/Tk-based UI
+
+set -euo pipefail
+
+ui_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+ui_env=${METHYLOME_UI_ENV:-Methylome.Plants_env}
+
+if [[ ${CONDA_DEFAULT_ENV:-} != "$ui_env" ]]; then
+  if command -v conda >/dev/null 2>&1; then
+    conda_base=$(conda info --base)
+  elif [[ -n ${CONDA_EXE:-} && -x ${CONDA_EXE:-} ]]; then
+    conda_base=$("$CONDA_EXE" info --base)
+  else
+    printf 'Conda was not found. Activate %s, then run the R script directly.\n' "$ui_env" >&2
+    exit 1
+  fi
+  # Some Conda versions access unset variables while activating.
+  set +u
+  source "$conda_base/etc/profile.d/conda.sh"
+  conda activate "$ui_env"
+  set -u
+fi
+
+r_script=${R_SCRIPT_BIN:-Rscript}
+if ! command -v "$r_script" >/dev/null 2>&1; then
+  printf 'Rscript was not found in %s.\n' "$ui_env" >&2
+  exit 1
+fi
+# exec "$r_script" "$ui_dir/scripts/Methylome.Plants_UI_tcltk.R" "$@"
+
+ui_status=0
+"$r_script" "$ui_dir/scripts/Methylome.Plants_UI_tcltk.R" "$@" \
+  || ui_status=$?
+
+case "$ui_status" in
+  0) exit 0 ;;
+  78) ;;
+  *) exit "$ui_status" ;;
+esac
+
+# Restore the shell behavior expected by the old whiptail code.
+set +e
+set +u
+set +o pipefail
+
+
+###############################################################
+### Whiptail-based UI fallback
+
 # Get the directory where the Bash script is located
 Methylome_At_path=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
 cd "$Methylome_At_path"
@@ -540,6 +590,19 @@ configure_reference() {
       ;;
   esac
 }
+
+# # Create a bundle for the **tcltk** desktop UI without entering pipeline setup.
+# if [ "${1:-}" = "--create-reference-bundle" ]; then
+#   if [ "$#" -ne 2 ]; then
+#     printf 'Usage: %s --create-reference-bundle RESULT_FILE\n' "$0" >&2
+#     exit 1
+#   fi
+#   if run_reference_wizard; then
+#     printf '%s\n' "$SCRIPT1_reference_bundle" > "$2" || exit 1
+#     exit 0
+#   fi
+#   exit 1
+# fi
 
 ##################
 # WHIPTAIL DIALOGS

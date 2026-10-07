@@ -180,7 +180,8 @@ significance indicator, KEGG uses it in its Wilcoxon test.
 
 - Linux environment (WSL works)
 - [Anaconda / Miniconda](https://docs.conda.io/en/latest/miniconda.html) ([download](https://repo.anaconda.com/archive/Anaconda3-2026.07-1-Linux-aarch64.sh)) 
-- [`whiptail`](https://linux.die.net/man/1/whiptail) (UI mode)
+- Tcl/Tk support in R and a graphical display (Linux desktop or X11 forwarding) for the desktop UI
+- [`whiptail`](https://linux.die.net/man/1/whiptail) for the terminal UI fallback
 
 ### Local R environment
 
@@ -254,7 +255,7 @@ conda install -c conda-forge -c bioconda r-base=4.4.2 ${packages[@]}
 Rscript scripts/install_R_packages.R
 
 chmod +x ./Methylome.Plants_UI.sh
-chmod +x ./scripts/*.At.sh
+chmod +x ./scripts/*.sh
 ```
 
 ---
@@ -361,17 +362,19 @@ Bundle configuration is preferred because it keeps these files tied to the corre
 ./Methylome.Plants_UI.sh
 ```
 
-The UI opens a plant-reference setup before the analysis options. Choose one of:
+The launcher opens the Tcl/Tk desktop UI, with automatic fallback to the whiptail terminal UI if graphical startup fails. The desktop UI has three tabs:
 
-- **Reference wizard** — select an organism, assembly and GTF/GFF3, then add only the optional resources you have.
-- **Existing bundle** — reuse a previously generated or manually maintained YAML bundle.
-- **TAIR10** — use the bundled Arabidopsis reference.
+- **Inputs** — select the pipeline folder and sample table. Use the default TAIR10 bundle, browse an existing YAML, or choose **Create bundle…** beside the YAML field. **Run Bismark** enables its input fields and extractor memory setting.
+- **Analyses** — check **Run methylome analysis** to enable its analysis options and presets.
+- **Parameters** — adjust CPU cores and analysis settings. Downstream parameters follow **Run methylome analysis**; CPU cores remain available for either pipeline.
+
+Group control sample rows first and treatment rows second. Use **Validate / preview** to check inputs and print commands to the console, then **Run pipeline**. **Save settings** and **Load settings** let you reuse a configuration. Run output appears in the console; the desktop UI saves settings, validated samples, and runner files under `results/ui_runs/`.
 
 The wizard treats GO and KEGG as independent organism selections. For GO it searches installed and available Bioconductor `OrgDb` packages, offers installation after confirmation, and tests every supported key type against gene IDs from the annotation. For KEGG it retrieves a searchable organism/code list and caches it locally.
 
 Exact chromosome lengths can come from a FASTA, `.fai`, chromosome-size table, or a selected `OrgDb` package that exposes `CHRLENGTHS`. If exact lengths are unavailable, the core pipeline can run with observed genomic ranges and reports that limitation. TE, gbM, descriptions, centromeres, heterochromatin, TFBS, gene-to-GO, gene sets, KEGG ID mappings and sequence aliases are all optional.
 
-Successful wizard configurations are saved under `reference_bundles/generated/` by default and are passed to the pipeline exactly like a manual bundle.
+Successful wizard configurations are saved under `reference_bundles/generated/` by default. The desktop UI selects the generated YAML automatically; it can also be reused like any manual bundle.
 
 ### Manual mode
 
@@ -590,7 +593,8 @@ wt_2    PATH/TO/FILE/wt2_R2.fastq
 
 ## Troubleshooting / common issues
 
-- **UI issues (whiptail booleans toggling incorrectly):** if multiple menu items flip together, it usually means the *tag/value* fields were reused; ensure each menu item has a unique tag (the left column), and only display the current value in the right column.
+- **Desktop UI does not open:** the launcher falls back to whiptail when graphical startup fails. Run `./Methylome.Plants_UI.sh --check` to report R/Tcl/Tk and display availability without opening the UI.
+- **Whiptail fallback (booleans toggling incorrectly):** if multiple menu items flip together, it usually means the *tag/value* fields were reused; ensure each menu item has a unique tag (the left column), and only display the current value in the right column.
 - **Single-sample runs:** PCA is skipped; DMR testing uses Fisher’s exact test instead of beta regression.
 - **Nanopore bedMethyl:** if you request trinucleotide context, you must provide the genome directory (`-t`).
 
