@@ -281,8 +281,8 @@ Methylome.Plants_main <- function(var1, # control
       tryCatch(
         {
           message("")
-          conR_var1 <- conversionRate(meth_var1_replicates, var1, chloroplast_seqlevels, bundle_alias_map(reference_bundle))
-          conR_var2 <- conversionRate(meth_var2_replicates, var2, chloroplast_seqlevels, bundle_alias_map(reference_bundle))
+          conR_var1 <- conversionRate(load_vars[[1]]$methylationDataReplicates, var1, chloroplast_seqlevels, bundle_alias_map(reference_bundle))
+          conR_var2 <- conversionRate(load_vars[[2]]$methylationDataReplicates, var2, chloroplast_seqlevels, bundle_alias_map(reference_bundle))
           conR_b <- rbind(conR_var1, conR_var2)
           if (nrow(conR_b)) {
             write.csv(conR_b, paste0(qc_dir_path, "/conversion_rate.csv"), row.names = F)
