@@ -304,10 +304,6 @@ This report summarizes the results of the **Methylome.Plants** pipeline for **`r
 - Visualization of methylation patterns, PCA, and functional group overlaps
 - Optional analyses: motif enrichment, GO/KEGG, meta-plots, and more
 
-**Software citation:**
-
-Yerushalmy, Y., & Amir, R. (2026). *Methylome.Plants: A Comprehensive Pipeline for Plant Whole-Genome Methylome Analysis*, (Version 0.9.1). Zenodo. [doi.org/10.5281/zenodo.21808728](https://doi.org/10.5281/zenodo.21808728)
-
 ---
 
 #### Analyses checklist
@@ -367,6 +363,13 @@ check(params$analyze_DMVs),
 check(params$analyze_dH)
 ))
 ```
+
+---
+
+**Pipeline citation:**
+
+Yerushalmy, Y., & Amir, R. (2026). *Methylome.Plants: A Comprehensive Pipeline for Plant Whole-Genome Methylome Analysis*, (Version 0.9.1). Zenodo. [doi.org/10.5281/zenodo.21808728](https://doi.org/10.5281/zenodo.21808728)
+
 
 ### QC {.tabset}
 
@@ -518,13 +521,13 @@ if (isTRUE(params$run_CX_Chrplot)) {
 
   if (dir.exists(ChrPlot_subCX_path)) {
     sub_files <- list_media_files(ChrPlot_subCX_path, recursive = TRUE)
-    cat("##### subCX {.tabset}\n\n")
+    # cat("##### subCX {.tabset}\n\n")
     if (length(sub_files) > 0) {
       for (f in sub_files) {
         subchrplot_filename <- gsub("ChrPlot_", "", tools::file_path_sans_ext(basename(f)))
         subchrplot_filename <- gsub("subCX_", "", subchrplot_filename)
         subchrplot_filename <- gsub("_", " ", subchrplot_filename)
-        cat("##### ", subchrplot_filename, "\n\n", sep = "")
+        cat("##### subCX - ", subchrplot_filename, "\n\n", sep = "")
         emit_grid(f, cols = 1, max_height_px = params$plot_max_height_px)
       }
     }
@@ -546,7 +549,7 @@ if (isTRUE(params$total_meth_annotation)) {
       cat("##### ", tools::file_path_sans_ext(basename(csv)), "\n\n", sep = "")
       tab <- tryCatch(read.csv(csv, nrows = 50, check.names = FALSE), error = function(e) NULL)
       if (!is.null(tab)) {
-        kable(tab)
+        print(kable(tab))
         cat("\n\n")
       } else {
         cat("_Could not read table._\n\n")
@@ -586,24 +589,24 @@ if (isTRUE(params$run_TE_metaPlots) || isTRUE(params$run_GeneBody_metaPlots) || 
 ```{r dmrs-section, results='asis'}
 if (isTRUE(params$analyze_DMRs)) { safe_section({
   cat("### DMRs {.tabset}\n\n")
-  cat("#### Settings\n\n")
+  # cat("#### Settings\n\n")
 
-settings <- data.frame(
-  Setting = c("methyl_files_type","binSize (bp)","minCytosinesCount","minReadsPerCytosine","pValueThreshold","minProportionDiff (CG,CHG,CHH)"),
-  Value = c(val1(params$methyl_files_type), val1(params$binSize), val1(params$minCytosinesCount), val1(params$minReadsPerCytosine),
-            val1(params$pValueThreshold), val1(params$minProportionDiff)),
-  Description = c(
-    "Type of input methylation files (e.g., CX_report).",
-    "Genome tiling window size used to reduce per-site noise.",
-    "Minimum informative cytosines required per bin.",
-    "Per-site coverage filter applied before summarizing bins.",
-    "Statistical cutoff for significance (adjusted p-value).",
-    "Minimal ΔmC thresholds for CG, CHG and CHH contexts."
-  ),
-  check.names = FALSE,
-  stringsAsFactors = FALSE
-)
-knitr::kable(settings)
+# settings <- data.frame(
+#   Setting = c("methyl_files_type","binSize (bp)","minCytosinesCount","minReadsPerCytosine","pValueThreshold","minProportionDiff (CG,CHG,CHH)"),
+#   Value = c(val1(params$methyl_files_type), val1(params$binSize), val1(params$minCytosinesCount), val1(params$minReadsPerCytosine),
+#             val1(params$pValueThreshold), val1(params$minProportionDiff)),
+#   Description = c(
+#     "Type of input methylation files (e.g., CX_report).",
+#     "Genome tiling window size used to reduce per-site noise.",
+#     "Minimum informative cytosines required per bin.",
+#     "Per-site coverage filter applied before summarizing bins.",
+#     "Statistical cutoff for significance (adjusted p-value).",
+#     "Minimal ΔmC thresholds for CG, CHG and CHH contexts."
+#   ),
+#   check.names = FALSE,
+#   stringsAsFactors = FALSE
+# )
+# knitr::kable(settings)
 
     ## Density
     dens <- list.files(DMRs_analysis_path, pattern = "DMRs_Density.*\\.(png|svg|jpg|jpeg|tiff)$", full.names = TRUE, ignore.case = TRUE)
@@ -625,9 +628,9 @@ knitr::kable(settings)
         emit_grid(pie_files, cols = 3, max_height_px = params$plot_max_height_px / 6)
     }
 
-    ## Chromosome distribution
-    cat("#### Chromosome plots\n\n")
-    emit_dir(ChrPlots_DMRs_path, recursive = TRUE, cols = 1, max_height_px = params$plot_max_height_px / 3)
+    # ## Chromosome distribution
+    # cat("#### Chromosome plots\n\n")
+    # emit_dir(ChrPlots_DMRs_path, recursive = TRUE, cols = 1, max_height_px = params$plot_max_height_px / 3)
 
     ## Genome annotation {.tabset}
     cat("#### Genome annotation {.tabset}\n\n")
@@ -732,15 +735,15 @@ knitr::kable(settings)
         }
     }
 
-    ## BigWigs
-    if (dir.exists(DMRs_bigWig_path)) {
-        bw <- list.files(DMRs_bigWig_path, pattern = "\\.(bw|bigWig)$", full.names = FALSE, ignore.case = TRUE)
-        if (length(bw) > 0) {
-            cat("#### BigWig tracks\n\n")
-            cat("These tracks can be loaded in IGV.\n\n")
-            cat(paste0("- ", bw, collapse = "\n"), "\n\n")
-        }
-    }
+    # ## BigWigs
+    # if (dir.exists(DMRs_bigWig_path)) {
+    #     bw <- list.files(DMRs_bigWig_path, pattern = "\\.(bw|bigWig)$", full.names = FALSE, ignore.case = TRUE)
+    #     if (length(bw) > 0) {
+    #         cat("#### BigWig tracks\n\n")
+    #         cat("These tracks can be loaded in IGV.\n\n")
+    #         cat(paste0("- ", bw, collapse = "\n"), "\n\n")
+    #     }
+    # }
 
     ## GO / KEGG (plots only)
     if (isTRUE(params$run_GO_analysis)) {
@@ -912,7 +915,7 @@ cat("##### Report parameters\n\n")
 kable(cfg3)
 ```
 
-#### .log file
+#### *.log* file
 
 ```{r session-log, results='asis'}
 log_path <- list.files(file.path(exp_path), pattern = paste0(".*\\.log$"), full.names = TRUE, ignore.case = TRUE)[1]

@@ -610,20 +610,20 @@ Methylome.Plants_main <- function(var1, # control
       )
       ##############################
 
-      ##### ChrPlots for DMRs #####
-      tryCatch(
-        {
-          source(paste0(scripts_dir, "/ChrPlots_DMRs.R"))
-          dir.create(ChrPlots_DMRs_path, showWarnings = FALSE)
-          setwd(ChrPlots_DMRs_path)
-          ChrPlots_DMRs(comparison_name, DMRs_bins, var1, var2, context, scripts_dir)
-          message(time_msg(paste0("\t", context, ":")), "\tgenerated ChrPlots for all DMRs: done")
-        },
-        error = function(cond) {
-          cat("\n*\n generated ChrPlots for all DMRs:\n", as.character(cond), "*\n")
-          message(time_msg(paste0("\t", context, ":")), "\tgenerated ChrPlots for all DMRs: fail\n")
-        }
-      )
+      # ##### ChrPlots for DMRs #####
+      # tryCatch(
+      #   {
+      #     source(paste0(scripts_dir, "/ChrPlots_DMRs.R"))
+      #     dir.create(ChrPlots_DMRs_path, showWarnings = FALSE)
+      #     setwd(ChrPlots_DMRs_path)
+      #     ChrPlots_DMRs(comparison_name, DMRs_bins, var1, var2, context, scripts_dir)
+      #     message(time_msg(paste0("\t", context, ":")), "\tgenerated ChrPlots for all DMRs: done")
+      #   },
+      #   error = function(cond) {
+      #     cat("\n*\n generated ChrPlots for all DMRs:\n", as.character(cond), "*\n")
+      #     message(time_msg(paste0("\t", context, ":")), "\tgenerated ChrPlots for all DMRs: fail\n")
+      #   }
+      # )
       setwd(exp_path)
 
       ##### Annotate DMRs and total-methylations #####

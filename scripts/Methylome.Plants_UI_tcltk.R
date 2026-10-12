@@ -22,7 +22,7 @@ find_pipeline <- function() {
 
 ui_defaults <- function(pipeline = find_pipeline()) {
   c(
-    pipeline = pipeline, samples = "", bundle = if (nzchar(pipeline))
+    pipeline = pipeline, samples = "", bismark_samples = "", bundle = if (nzchar(pipeline))
       file.path(pipeline, "reference_bundles", "arabidopsis_thaliana_TAIR10.yaml") else "",
     annotation = "", description = "", tes = "", fasta = "TAIR10",
     align_output = if (nzchar(pipeline)) file.path(pipeline, "bismark_CX_reports") else "",
@@ -83,11 +83,16 @@ validate_settings <- function(s) {
   s <- trimws(s)
   if (anyNA(s) || any(grepl("[\r\n\t]", s))) stop("Settings cannot contain tabs or newlines.")
   if (!is_checked(s, "align") && !is_checked(s, "methylome")) stop("Select at least one pipeline.")
-  for (key in c("pipeline", "samples")) {
-    if (!nzchar(s[key]) || !file.exists(s[key])) stop("Select an existing ", key, " path.")
-    s[key] <- normalizePath(s[key], mustWork = TRUE)
+  sample_key <- if (is_checked(s, "align")) "bismark_samples" else "samples"
+  sample_label <- if (is_checked(s, "align")) "Bismark samples table" else "methylome samples table"
+  if (!nzchar(s["pipeline"]) || !dir.exists(s["pipeline"])) {
+    stop("Select an existing pipeline folder.")
   }
-  if (!dir.exists(s["pipeline"]) || dir.exists(s["samples"])) stop("Invalid pipeline or samples path.")
+  s["pipeline"] <- normalizePath(s["pipeline"], mustWork = TRUE)
+  if (!nzchar(s[sample_key]) || !file.exists(s[sample_key]) || dir.exists(s[sample_key])) {
+    stop("Select an existing ", sample_label, ".")
+  }
+  s[sample_key] <- normalizePath(s[sample_key], mustWork = TRUE)
   if (any(!nzchar(Sys.which(c("bash", "nohup", "tail"))))) {
     stop("The UI needs the standard Linux commands bash, nohup and tail.")
   }
@@ -101,22 +106,27 @@ validate_settings <- function(s) {
         s[key] <- normalizePath(s[key], mustWork = TRUE)
       }
     }
+    if (is_checked(s, "align")) s["file_type"] <- "CX_report"
     if (!s["file_type"] %in% c("CX_report", "CGmap", "bedMethyl")) stop("Invalid input format.")
     if (!s["image_type"] %in% c("pdf", "svg", "png", "tiff", "jpeg", "bmp")) stop("Invalid image format.")
     if (!is_checked(s, "dmrs") && (is_checked(s, "go") || is_checked(s, "kegg"))) {
       stop("GO/KEGG need the main DMR analysis. Enable DMRs or disable GO/KEGG.")
     }
   }
-  integer_keys <- c("cores", "bin_size", "cytosines", "reads", "feature_bins")
+  integer_keys <- "cores"
+  if (is_checked(s, "methylome")) {
+    integer_keys <- c(integer_keys, "bin_size", "cytosines", "reads", "feature_bins")
+  }
   for (key in integer_keys) {
     value <- suppressWarnings(as.numeric(s[key]))
     if (!is.finite(value) || value < 1 || value != floor(value)) stop(key, " must be a positive integer.")
   }
-  for (key in c("cg", "chg", "chh", "pvalue")) {
+  proportion_keys <- if (is_checked(s, "methylome")) c("cg", "chg", "chh", "pvalue") else character()
+  for (key in proportion_keys) {
     value <- suppressWarnings(as.numeric(s[key]))
     if (!is.finite(value) || value <= 0 || value >= 1) stop(key, " must be between 0 and 1.")
   }
-  if (s["random"] != "all") {
+  if (is_checked(s, "methylome") && s["random"] != "all") {
     value <- suppressWarnings(as.numeric(s["random"]))
     if (!is.finite(value) || value < 1 || value != floor(value)) stop("Random genes must be a positive integer or all.")
   }
@@ -132,8 +142,8 @@ validate_settings <- function(s) {
     tools <- c("bismark", "bismark_genome_preparation", "bismark_methylation_extractor")
     if (any(!nzchar(Sys.which(tools)))) stop("Bismark tools are missing from the active environment.")
   }
-  sep <- if (grepl("\\.csv$", s["samples"], ignore.case = TRUE)) "," else "\t"
-  samples <- utils::read.table(s["samples"], header = FALSE, sep = sep,
+  sep <- if (grepl("\\.csv$", s[sample_key], ignore.case = TRUE)) "," else "\t"
+  samples <- utils::read.table(s[sample_key], header = FALSE, sep = sep,
                              quote = "", comment.char = "", colClasses = "character")
   if (ncol(samples) != 2L || !nrow(samples) || anyNA(samples)) {
     stop("Use a two-column sample table without a header: condition/sample, file path.")
@@ -145,7 +155,7 @@ validate_settings <- function(s) {
   }
   for (i in seq_len(nrow(samples))) {
     path <- samples[i, 2]
-    if (!startsWith(path, "/")) path <- file.path(dirname(s["samples"]), path)
+    if (!startsWith(path, "/")) path <- file.path(dirname(s[sample_key]), path)
     if (!file.exists(path) || dir.exists(path)) stop("Sample file not found: ", path)
     samples[i, 2] <- normalizePath(path, mustWork = TRUE)
   }
@@ -222,6 +232,7 @@ launch_ui <- function(pipeline = find_pipeline()) {
   state$timer <- NULL
   state$bismark_widgets <- list()
   state$methylome_widgets <- list()
+  state$methylome_inputs <- list()
   window <- tcltk::tktoplevel()
   tcltk::tkwm.title(window, "Methylome.Plants")
   tcltk::tkwm.geometry(window, "1040x800")
@@ -239,7 +250,7 @@ launch_ui <- function(pipeline = find_pipeline()) {
     tabs[[label]] <- tab
     tcltk::tkgrid.columnconfigure(tab, 1, weight = 1)
   }
-  status <- tcltk::tclVar("Select the pipeline folder and sample table. Preview before running.")
+  status <- tcltk::tclVar("Select a pipeline and its inputs. Preview before running.")
   footer <- tcltk::ttkframe(window, padding = 10)
   tcltk::tkgrid(footer, sticky = "ew")
   tcltk::tkgrid.columnconfigure(footer, 0, weight = 1)
@@ -257,8 +268,19 @@ launch_ui <- function(pipeline = find_pipeline()) {
   update_methylome_fields <- function() {
     enabled <- if (as.character(tcltk::tclvalue(vars$methylome)) == "1") "normal" else "disabled"
     for (widget in state$methylome_widgets) tcltk::tkconfigure(widget, state = enabled)
+    for (key in names(state$methylome_inputs)) {
+      active <- enabled == "normal" &&
+        !(as.character(tcltk::tclvalue(vars$align)) == "1" && key %in% c("samples", "file_type"))
+      field_state <- if (!active) "disabled" else
+        if (key %in% c("file_type", "image_type")) "readonly" else "normal"
+      for (widget in state$methylome_inputs[[key]]) tcltk::tkconfigure(widget, state = field_state)
+    }
   }
   set_settings <- function(values) {
+    if ("samples" %in% names(values) && !"bismark_samples" %in% names(values)) {
+      values["bismark_samples"] <- if (is_checked(values, "align")) values["samples"] else ""
+      if (is_checked(values, "align")) values["samples"] <- ""
+    }
     for (key in intersect(names(values), names(vars))) tcltk::tclvalue(vars[[key]]) <- values[key]
     update_bismark_fields()
     update_methylome_fields()
@@ -487,8 +509,11 @@ launch_ui <- function(pipeline = find_pipeline()) {
       tcltk::tkgrid(button, row = row, column = 2, padx = 5)
       widgets <- c(widgets, list(button))
     }
-    if (key %in% c("fasta", "align_output", "memory")) {
+    if (key %in% c("bismark_samples", "fasta", "align_output", "memory")) {
       state$bismark_widgets <- c(state$bismark_widgets, widgets)
+    }
+    if (key %in% c("samples", "bundle", "annotation", "description", "tes", "file_type", "image_type")) {
+      state$methylome_inputs[[key]] <- widgets
     }
     if (key %in% c("cg", "chg", "chh", "bin_size", "cytosines", "reads",
                    "pvalue", "feature_bins", "random")) {
@@ -497,31 +522,38 @@ launch_ui <- function(pipeline = find_pipeline()) {
   }
   input <- tabs$Inputs
   add_field(input, 0, "Pipeline folder", "pipeline", "directory")
-  add_field(input, 1, "Sample table (two columns, no header)", "samples", "file")
-  add_field(input, 2, "Reference bundle YAML", "bundle", "file")
-  tcltk::tkgrid(tcltk::ttkbutton(input, text = "Create bundle…", command = create_bundle),
-               row = 2, column = 3, padx = 5, sticky = "w")
-  add_field(input, 3, "Gene annotation override (optional)", "annotation", "file")
-  add_field(input, 4, "Description override (optional)", "description", "file")
-  add_field(input, 5, "TE annotation override (optional)", "tes", "file")
-  add_field(input, 6, "Methylation input format", "file_type", choices = c("CX_report", "CGmap", "bedMethyl"))
-  add_field(input, 7, "Image format", "image_type", choices = c("png", "pdf", "svg", "tiff", "jpeg", "bmp"))
+  tcltk::tkgrid(tcltk::ttkcheckbutton(input, text = "Run methylome analysis",
+                                    variable = vars$methylome, command = update_methylome_fields),
+               row = 1, column = 0, columnspan = 3, sticky = "w", pady = 6)
+  add_field(input, 2, "Methylome samples table (two columns, no header)", "samples", "file")
+  add_field(input, 3, "Reference bundle YAML", "bundle", "file")
+  create_bundle_button <- tcltk::ttkbutton(input, text = "Create bundle…", command = create_bundle)
+  tcltk::tkgrid(create_bundle_button, row = 3, column = 3, padx = 5, sticky = "w")
+  state$methylome_inputs$bundle <- c(state$methylome_inputs$bundle, list(create_bundle_button))
+  add_field(input, 4, "Gene annotation override (optional)", "annotation", "file")
+  add_field(input, 5, "Description override (optional)", "description", "file")
+  add_field(input, 6, "TE annotation override (optional)", "tes", "file")
+  add_field(input, 7, "Methylation input format", "file_type", choices = c("CX_report", "CGmap", "bedMethyl"))
+  add_field(input, 8, "Image format", "image_type", choices = c("png", "pdf", "svg", "tiff", "jpeg", "bmp"))
   tcltk::tkgrid(tcltk::ttkcheckbutton(input, text = "Run Bismark: FASTQ → CX reports",
-                                    variable = vars$align, command = update_bismark_fields),
-               row = 8, column = 0, columnspan = 3, sticky = "w", pady = c(24, 6))
-  add_field(input, 9, "Bismark FASTA (or TAIR10)", "fasta", "file")
-  add_field(input, 10, "Bismark output folder", "align_output", "directory")
+                                    variable = vars$align, command = function() {
+                                      update_bismark_fields()
+                                      update_methylome_fields()
+                                    }),
+               row = 9, column = 0, columnspan = 3, sticky = "w", pady = c(24, 6))
+  add_field(input, 10, "Bismark samples table (FASTQ)", "bismark_samples", "file")
+  add_field(input, 11, "Bismark FASTA (or TAIR10)", "fasta", "file")
+  add_field(input, 12, "Bismark output folder", "align_output", "directory")
   tcltk::tkgrid(tcltk::ttklabel(input, wraplength = 870, text = paste(
+    "Sample tables use two columns with no header.",
     "Reference resources come from the selected YAML; optional overrides may be left empty.",
     "For methylation input, put control rows first and treatment rows second.",
     "For FASTQ alignment, use names such as wt_1 and mutant_1; Bismark removes the replicate suffix.",
+    "When both pipelines are enabled, methylome analysis uses the generated Bismark CX reports.",
     "Use Create bundle to prepare a new reference."
-  )), row = 11, column = 0, columnspan = 3, pady = 12, sticky = "w")
+  )), row = 13, column = 0, columnspan = 4, pady = 12, sticky = "w")
 
   analyses <- tabs$Analyses
-  tcltk::tkgrid(tcltk::ttkcheckbutton(analyses, text = "Run methylome analysis",
-                                    variable = vars$methylome, command = update_methylome_fields),
-               row = 0, column = 0, sticky = "w", pady = 6)
   keys <- names(ui_analysis_labels)
   for (i in seq_along(keys)) {
     checkbox <- tcltk::ttkcheckbutton(analyses, text = ui_analysis_labels[i],
@@ -631,6 +663,7 @@ launch_ui <- function(pipeline = find_pipeline()) {
   ui_started <<- TRUE
 
   tcltk::tkwait.window(window)
+  tcltk::tcl("update")
   if (!is.null(state$run_script)) {
     exit_code <- system2("bash", args = shQuote(state$run_script), wait = TRUE)
 
