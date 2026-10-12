@@ -297,11 +297,13 @@ te_plot_conf <- function(x, chr_amount) {
 
 ###################################################################
 
-windowSize_mcol <- function(x, mcol_name, windowSize = 2.5e5) {
+windowSize_mcol <- function(x, mcol_name, n_windows = 480) {
     # chromosome lengths
     seqlens <- vapply(split(end(x), seqnames(x)), max, numeric(1))
     seqlengths(x) <- seqlens[seqlevels(x)]
 
+    windowSize <- ceiling(sum(seqlens) / n_windows)
+    
     # windows by window size
     windows <- tileGenome(seqlens,
         tilewidth = windowSize,

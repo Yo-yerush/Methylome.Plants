@@ -115,7 +115,7 @@ ChrPlots_CX_all <- function(
         )
 
         layout(lay,
-            widths  = c(0.8, chr_length, 1.2),
+            widths  = c(lcm(2.8), chr_length, 1.2),
             heights = c(1, 1, 1, 0.25) # last row for Chrs
         )
     } else {
@@ -126,7 +126,7 @@ ChrPlots_CX_all <- function(
         )
 
         layout(lay,
-            widths  = c(0.8, chr_length, 1.2),
+            widths  = c(lcm(2.8), chr_length, 1.2),
             heights = c(1, 1, 1, 0.35, 0.30)
         )
     }
@@ -149,44 +149,17 @@ ChrPlots_CX_all <- function(
             y_mid_cntx <- ifelse(cntx == "CG", y_mid_cg, ifelse(cntx == "CHG", y_mid_chg, y_mid_chh))
             y_min_cntx <- ifelse(cntx == "CG", y_min_cg, ifelse(cntx == "CHG", y_min_chg, y_min_chh))
 
-            par(mar = c(0, 2.5, 0, 0))
+            par(mar = c(0, 3, 0, 0), mgp = c(1.7, 0.5, 0))
             plot(NA, NA,
                 xlim = c(0, 1), ylim = c(y_min_cntx, y_max_cntx),
                 axes = FALSE, xlab = "",
                 ylab = y_title,
-                cex.lab = y_title_cex
+                cex.lab = 0.7 * y_title_cex
             )
             axis(2,
                 at = c(y_min_cntx, y_mid_cntx, y_max_cntx),
-                labels = FALSE # ,  c(paste0("       ", y_min_cntx), y_mid_cntx, paste0(y_max_cntx, "      ")),
-                # col = "gray35", cex.axis = 1
-            )
-            mtext(
-                side = 2,
-                text = y_min_cntx,
-                at = y_min_cntx,
-                adj = ifelse(y_min_cntx == 0, 0.5, 0), #
-                line = 0.35,
-                col = "gray25",
-                cex = 0.55
-            )
-            mtext(
-                side = 2,
-                text = y_mid_cntx,
-                at = y_mid_cntx,
-                adj = 0.5, #
-                line = 0.35,
-                col = "gray25",
-                cex = 0.55
-            )
-            mtext(
-                side = 2,
-                text = y_max_cntx,
-                at = y_max_cntx,
-                adj = ifelse(y_max_cntx == 0 | y_max_cntx == 1, 0.5, 0.9), #
-                line = 0.35,
-                col = "gray25",
-                cex = 0.55
+                labels = c(y_min_cntx, y_mid_cntx, y_max_cntx),
+                pos = 1, las = 1, cex.axis = 0.55, col.axis = "gray25"
             )
 
             ## chromosome
@@ -274,19 +247,14 @@ te_plot_conf <- function(x, chr_amount) {
     y_mid_te <- 0.5 # y_max_te / 2
     y_min_te <- 0
 
-    par(mar = c(0, 4, 0, 0))
+    par(mar = c(0, 3, 0, 0), mgp = c(1.7, 0.5, 0))
     plot(NA, NA,
         xlim = c(0, 1), ylim = c(y_min_te, y_max_te),
         axes = FALSE, xlab = "",
         ylab = "TEs", cex.lab = 1.2
     )
 
-    axis(2, at = c(y_min_te, y_max_te), labels = FALSE)
-    mtext(
-        side = 2, text = c("", ""), # c(y_min_te, y_mid_te, round(y_max_te, 2)),
-        at = c(y_min_te, y_max_te) # ,
-        # line = 0.65, col = "gray25", cex = 0.7, adj = c(0, .5, .9)
-    )
+    axis(2, at = c(y_min_te, y_max_te), labels = FALSE, pos = 1)
 
     par(mar = c(0, 0, 0, 0))
     te_list <- list(te_gr)
@@ -299,10 +267,12 @@ te_plot_conf <- function(x, chr_amount) {
 
 ###################################################################
 
-windowSize_mcol <- function(x, mcol_name, windowSize = 2.5e5) {
+windowSize_mcol <- function(x, mcol_name, n_windows = 480) {
     # chromosome lengths
     seqlens <- vapply(split(end(x), seqnames(x)), max, numeric(1))
     seqlengths(x) <- seqlens[seqlevels(x)]
+
+    windowSize <- ceiling(sum(seqlens) / n_windows)
 
     # windows by window size
     windows <- tileGenome(seqlens,
