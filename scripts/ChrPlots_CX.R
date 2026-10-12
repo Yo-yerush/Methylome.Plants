@@ -149,18 +149,18 @@ ChrPlots_CX_all <- function(
             y_mid_cntx <- ifelse(cntx == "CG", y_mid_cg, ifelse(cntx == "CHG", y_mid_chg, y_mid_chh))
             y_min_cntx <- ifelse(cntx == "CG", y_min_cg, ifelse(cntx == "CHG", y_min_chg, y_min_chh))
 
-            par(mar = c(0, 3, 0, 0), mgp = c(1.7, 0.5, 0))
+            par(mar = c(0, 3, 0, 0), mgp = c(1.7, 0.8, 0))
             plot(NA, NA,
                 xlim = c(0, 1), ylim = c(y_min_cntx, y_max_cntx),
                 axes = FALSE, xlab = "", ylab = ""
             )
             text(0.5, (y_min_cntx + y_max_cntx) / 2, y_title,
-                srt = 90, cex = 0.7 * y_title_cex
+                srt = 90, cex = 0.85 * y_title_cex
             )
             axis(2,
                 at = c(y_min_cntx, y_mid_cntx, y_max_cntx),
                 labels = c(y_min_cntx, y_mid_cntx, y_max_cntx),
-                pos = 1, las = 1, cex.axis = 0.55, col.axis = "gray25"
+                pos = 1, las = 1, cex.axis = 0.7, col.axis = "gray25"
             )
 
             ## chromosome

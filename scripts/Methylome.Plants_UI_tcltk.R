@@ -534,7 +534,6 @@ launch_ui <- function(pipeline = find_pipeline()) {
   add_field(input, 5, "Description override (optional)", "description", "file")
   add_field(input, 6, "TE annotation override (optional)", "tes", "file")
   add_field(input, 7, "Methylation input format", "file_type", choices = c("CX_report", "CGmap", "bedMethyl"))
-  add_field(input, 8, "Image format", "image_type", choices = c("png", "pdf", "svg", "tiff", "jpeg", "bmp"))
   tcltk::tkgrid(tcltk::ttkcheckbutton(input, text = "Run Bismark: FASTQ → CX reports",
                                     variable = vars$align, command = function() {
                                       update_bismark_fields()
@@ -587,6 +586,8 @@ launch_ui <- function(pipeline = find_pipeline()) {
               pvalue = "DMR adjusted-score cutoff", feature_bins = "Gene-feature bin size",
               random = "Metaplot sample count (or all)")
   for (i in seq_along(labels)) add_field(parameters, i - 1L, labels[i], names(labels)[i])
+  add_field(parameters, length(labels), "Image format", "image_type",
+            choices = c("png", "pdf", "svg", "tiff", "jpeg", "bmp"))
   update_bismark_fields()
   update_methylome_fields()
 
