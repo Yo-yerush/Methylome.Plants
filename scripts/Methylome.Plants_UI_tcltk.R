@@ -233,6 +233,7 @@ launch_ui <- function(pipeline = find_pipeline()) {
   state$bismark_widgets <- list()
   state$methylome_widgets <- list()
   state$methylome_inputs <- list()
+  state$dmr_widgets <- list()
   window <- tcltk::tktoplevel()
   tcltk::tkwm.title(window, "Methylome.Plants")
   tcltk::tkwm.geometry(window, "1040x800")
@@ -265,6 +266,14 @@ launch_ui <- function(pipeline = find_pipeline()) {
     enabled <- if (as.character(tcltk::tclvalue(vars$align)) == "1") "normal" else "disabled"
     for (widget in state$bismark_widgets) tcltk::tkconfigure(widget, state = enabled)
   }
+  update_dmr_fields <- function() {
+    if (as.character(tcltk::tclvalue(vars$dmrs)) != "1") {
+      for (key in c("groups", "go", "kegg")) tcltk::tclvalue(vars[[key]]) <- "0"
+    }
+    enabled <- if (as.character(tcltk::tclvalue(vars$methylome)) == "1" &&
+                   as.character(tcltk::tclvalue(vars$dmrs)) == "1") "normal" else "disabled"
+    for (widget in state$dmr_widgets) tcltk::tkconfigure(widget, state = enabled)
+  }
   update_methylome_fields <- function() {
     enabled <- if (as.character(tcltk::tclvalue(vars$methylome)) == "1") "normal" else "disabled"
     for (widget in state$methylome_widgets) tcltk::tkconfigure(widget, state = enabled)
@@ -275,6 +284,7 @@ launch_ui <- function(pipeline = find_pipeline()) {
         if (key %in% c("file_type", "image_type")) "readonly" else "normal"
       for (widget in state$methylome_inputs[[key]]) tcltk::tkconfigure(widget, state = field_state)
     }
+    update_dmr_fields()
   }
   set_settings <- function(values) {
     if ("samples" %in% names(values) && !"bismark_samples" %in% names(values)) {
@@ -554,14 +564,27 @@ launch_ui <- function(pipeline = find_pipeline()) {
 
   analyses <- tabs$Analyses
   keys <- names(ui_analysis_labels)
-  for (i in seq_along(keys)) {
-    checkbox <- tcltk::ttkcheckbutton(analyses, text = ui_analysis_labels[i],
-                                     variable = vars[[keys[i]]])
-    tcltk::tkgrid(checkbox,
-                 row = 1 + (i - 1L) %% 9L, column = (i - 1L) %/% 9L,
-                 padx = 6, pady = 7, sticky = "w")
-    state$methylome_widgets <- c(state$methylome_widgets, list(checkbox))
+  add_analysis_section <- function(title, group_keys, column, row) {
+    tcltk::tkgrid(tcltk::ttklabel(analyses, text = title, font = "TkHeadingFont"),
+                 row = row, column = column, padx = 6, pady = c(8, 2), sticky = "w")
+    for (i in seq_along(group_keys)) {
+      key <- group_keys[i]
+      checkbox <- tcltk::ttkcheckbutton(analyses, text = ui_analysis_labels[key],
+                                       variable = vars[[key]])
+      if (key == "dmrs") tcltk::tkconfigure(checkbox, command = update_dmr_fields)
+      tcltk::tkgrid(checkbox, row = row + i, column = column,
+                   padx = 6, pady = 7, sticky = "w")
+      state$methylome_widgets <- c(state$methylome_widgets, list(checkbox))
+      if (key %in% c("groups", "go", "kegg")) {
+        state$dmr_widgets <- c(state$dmr_widgets, list(checkbox))
+      }
+    }
   }
+  add_analysis_section("QC and total methylation",
+                       c("qc", "total", "pca", "chromosomes", "te_distance", "annotation_counts", "tf"), 0, 0)
+  add_analysis_section("Metaplots", c("te_mp", "gene_mp", "feature_mp"), 0, 9)
+  add_analysis_section("DMRs and downstream analyses", c("dmrs", "groups", "go", "kegg"), 1, 0)
+  add_analysis_section("Other analyses", c("strand", "dmv", "delta_h"), 1, 6)
   preset <- function(mode) function() {
     values <- setNames(rep("0", length(keys)), keys)
     if (mode == "default") values <- ui_defaults()[keys]
@@ -569,7 +592,7 @@ launch_ui <- function(pipeline = find_pipeline()) {
     set_settings(values)
   }
   presets <- tcltk::ttkframe(analyses)
-  tcltk::tkgrid(presets, row = 11, column = 0, columnspan = 2, pady = 14, sticky = "w")
+  tcltk::tkgrid(presets, row = 14, column = 0, columnspan = 2, pady = 14, sticky = "w")
   preset_buttons <- list(
     tcltk::ttkbutton(presets, text = "Basic analyses", command = preset("basic")),
     tcltk::ttkbutton(presets, text = "All analyses off", command = preset("off")),
