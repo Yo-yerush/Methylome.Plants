@@ -148,6 +148,71 @@ ChrPlots_CX_all <- function(
             y_max_cntx <- ifelse(cntx == "CG", y_max_cg, ifelse(cntx == "CHG", y_max_chg, y_max_chh))
             y_mid_cntx <- ifelse(cntx == "CG", y_mid_cg, ifelse(cntx == "CHG", y_mid_chg, y_mid_chh))
             y_min_cntx <- ifelse(cntx == "CG", y_min_cg, ifelse(cntx == "CHG", y_min_chg, y_min_chh))
+            
+            ################################################################
+            # y-max values
+            if (cntx == "CG") {
+                cg_max <- max(
+                    0,
+                    abs(unlist(lapply(meth_vars_context, function(x) x$mean_value))),
+                    na.rm = TRUE
+                )
+
+                if (y_min_cntx < 0) {
+                    y_max_cntx <- if (cg_max <= 0.05) 0.05 else
+                                 if (cg_max <= 0.10) 0.10 else
+                                 if (cg_max <= 0.20) 0.20 else
+                                 if (cg_max <= 0.30) 0.30 else 0.40
+                    y_min_cntx <- -y_max_cntx
+                } else {
+                    y_max_cntx <- if (cg_max <= 0.20) 0.20 else
+                                 if (cg_max <= 0.5) 0.5 else
+                                 if (cg_max <= 0.8) 0.8 else 1
+                }
+
+                y_mid_cntx <- (y_min_cntx + y_max_cntx) / 2
+
+            } else if (cntx == "CHG") {
+                chg_max <- max(
+                    0,
+                    abs(unlist(lapply(meth_vars_context, function(x) x$mean_value))),
+                    na.rm = TRUE
+                )
+
+                if (y_min_cntx < 0) {
+                    y_max_cntx <- if (chg_max <= 0.05) 0.05 else
+                                 if (chg_max <= 0.10) 0.10 else
+                                 if (chg_max <= 0.20) 0.20 else 0.30
+                    y_min_cntx <- -y_max_cntx
+                } else {
+                    y_max_cntx <- if (chg_max <= 0.10) 0.10 else
+                                 if (chg_max <= 0.4) 0.4 else
+                                 if (chg_max <= 0.6) 0.6 else 0.7
+                }
+
+                y_mid_cntx <- (y_min_cntx + y_max_cntx) / 2
+
+            } else if (cntx == "CHH") {
+                chh_max <- max(
+                    0,
+                    abs(unlist(lapply(meth_vars_context, function(x) x$mean_value))),
+                    na.rm = TRUE
+                )
+
+                if (y_min_cntx < 0) {
+                    y_max_cntx <- if (chh_max <= 0.02) 0.02 else
+                                 if (chh_max <= 0.05) 0.05 else 0.10
+                    y_min_cntx <- -y_max_cntx
+                } else {
+                    y_max_cntx <- if (chh_max <= 0.05) 0.05 else
+                                 if (chh_max <= 0.08) 0.08 else
+                                 if (chh_max <= 0.10) 0.10 else
+                                 if (chh_max <= 0.15) 0.15 else 0.20
+                }
+
+                y_mid_cntx <- (y_min_cntx + y_max_cntx) / 2
+            }
+            ################################################################
 
             par(mar = c(0, 3, 0, 0), mgp = c(1.7, 0.8, 0))
             plot(NA, NA,
