@@ -42,9 +42,9 @@ harmonize_seqlevels <- function(gr_obj, reference_bundle = NULL, keep_non_primar
       stop('None of the configured primary_seqlevels occur in this genomic input.')
     }
     dropped <- setdiff(as.character(GenomeInfoDb::seqlevels(gr_obj)), present_primary)
-    if (length(dropped)) {
-      message('Reference bundle excludes non-primary sequence levels: ', paste(dropped, collapse = ', '))
-    }
+    # if (length(dropped)) {
+    #   message('Reference bundle excludes non-primary sequence levels: ', paste(dropped, collapse = ', '))
+    # }
     gr_obj <- GenomeInfoDb::keepSeqlevels(gr_obj, present_primary, pruning.mode = "coarse")
   }
 

@@ -152,9 +152,10 @@ ChrPlots_CX_all <- function(
             par(mar = c(0, 3, 0, 0), mgp = c(1.7, 0.5, 0))
             plot(NA, NA,
                 xlim = c(0, 1), ylim = c(y_min_cntx, y_max_cntx),
-                axes = FALSE, xlab = "",
-                ylab = y_title,
-                cex.lab = 0.7 * y_title_cex
+                axes = FALSE, xlab = "", ylab = ""
+            )
+            text(0.5, (y_min_cntx + y_max_cntx) / 2, y_title,
+                srt = 90, cex = 0.7 * y_title_cex
             )
             axis(2,
                 at = c(y_min_cntx, y_mid_cntx, y_max_cntx),
@@ -250,9 +251,9 @@ te_plot_conf <- function(x, chr_amount) {
     par(mar = c(0, 3, 0, 0), mgp = c(1.7, 0.5, 0))
     plot(NA, NA,
         xlim = c(0, 1), ylim = c(y_min_te, y_max_te),
-        axes = FALSE, xlab = "",
-        ylab = "TEs", cex.lab = 1.2
+        axes = FALSE, xlab = "", ylab = ""
     )
+    text(0.5, (y_min_te + y_max_te) / 2, "TEs", srt = 90, cex = 1.2)
 
     axis(2, at = c(y_min_te, y_max_te), labels = FALSE, pos = 1)
 

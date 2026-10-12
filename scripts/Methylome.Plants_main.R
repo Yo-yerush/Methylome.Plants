@@ -267,10 +267,10 @@ Methylome.Plants_main <- function(var1, # control
 
   ###########################################################################
 
-  message(sep_cat("QC"))
-  cat(sep_cat("QC"))
-
   if (run_QC) {
+    message(sep_cat("QC"))
+    cat(sep_cat("QC"))
+
     dir.create(qc_dir_path, showWarnings = F)
     setwd(qc_dir_path)
   
