@@ -3,15 +3,15 @@
 samples_file=""
 
 # Get the directory where the Bash script is located
-Methylome_At_path=$(pwd)
-# Methylome_At_path=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
-# Methylome_At_path="$Methylome_At_path/../"
+Methylome_Plants_path=$(pwd)
+# Methylome_Plants_path=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
+# Methylome_Plants_path="$Methylome_Plants_path/../"
 
 # Default files path
 annotation_file=""
 description_file=""
 TEs_file=""
-reference_bundle="$Methylome_At_path/reference_bundles/arabidopsis_thaliana_TAIR10.yaml"
+reference_bundle="$Methylome_Plants_path/reference_bundles/arabidopsis_thaliana_TAIR10.yaml"
 reference_bundle_explicit=false
 
 # Default values for optional arguments
@@ -63,8 +63,8 @@ usage() {
   echo "  --description_file            Override the bundle description file"
   echo "  --TEs_file                    Override the bundle Transposable Elements file"
   echo "  --reference_bundle            Species/assembly reference bundle YAML [default: bundled TAIR10 profile]"
-  echo "  --pipeline_path               Path to Methylome.Plants [default: $Methylome_At_path]"
-  echo "  --Methylome_At_path           Deprecated alias for --pipeline_path"
+  echo "  --pipeline_path               Path to Methylome.Plants [default: $Methylome_Plants_path]"
+  echo "  --Methylome_Plants_path           Deprecated alias for --pipeline_path"
   echo ""
   echo "DMRs analysis arguments:"
   echo "  --minProportionDiff_CG        Minimum proportion difference for CG [default: $minProportionDiff_CG]"
@@ -133,7 +133,7 @@ while [[ "$#" -gt 0 ]]; do
     --description_file) description_file="$2"; shift ;;
     --TEs_file) TEs_file="$2"; shift ;;
     --reference_bundle) reference_bundle="$2"; reference_bundle_explicit=true; shift ;;
-    --pipeline_path | --Methylome_At_path) Methylome_At_path="$2"; shift ;;
+    --pipeline_path | --Methylome_Plants_path) Methylome_Plants_path="$2"; shift ;;
     --DMRs_off) DMR_analysis=FALSE ;;
     --QC_off) QC_plots=FALSE ;;
     --strand_DMRs) strand_DMRs=TRUE ;;
@@ -176,7 +176,7 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 if [[ "$reference_bundle_explicit" == "false" ]]; then
-  reference_bundle="$Methylome_At_path/reference_bundles/arabidopsis_thaliana_TAIR10.yaml"
+  reference_bundle="$Methylome_Plants_path/reference_bundles/arabidopsis_thaliana_TAIR10.yaml"
 fi
 
 # Check for required argument
@@ -210,9 +210,9 @@ dos2unix "$samples_file" 2>/dev/null
 [ -n "$description_file" ] && dos2unix "$description_file" 2>/dev/null
 [ -n "$TEs_file" ] && dos2unix "$TEs_file" 2>/dev/null
 
-# Change to the Methylome_At_path directory
-cd "$Methylome_At_path" || {
-    echo "Error: Cannot change directory to $Methylome_At_path"
+# Change to the Methylome_Plants_path directory
+cd "$Methylome_Plants_path" || {
+    echo "Error: Cannot change directory to $Methylome_Plants_path"
     exit 1
 }
 
@@ -287,7 +287,7 @@ echo "Annotation file: $annotation_file"
 echo "Description file: $description_file"
 echo "Transposable Elements file: $TEs_file"
 echo "Reference bundle: $reference_bundle"
-echo "Methylome.Plants directory path: $Methylome_At_path"
+echo "Methylome.Plants directory path: $Methylome_Plants_path"
 echo ""
 echo "Analyze DMRs workflow: $DMR_analysis"
 echo "Analyze strand-specific DMRs: $strand_DMRs"
@@ -310,7 +310,7 @@ echo "" >> "$log_file"
 # Call the R script with the arguments
 Rscript ./scripts/Methylome.Plants_run.R \
 "$samples_file" \
-"$Methylome_At_path" \
+"$Methylome_Plants_path" \
 "$annotation_file" \
 "$description_file" \
 "$TEs_file" \
@@ -386,4 +386,4 @@ echo "Annotation file: $annotation_file" >> "$log_file"
 echo "Description file: $description_file" >> "$log_file"
 echo "Transposable Elements file: $TEs_file" >> "$log_file"
 echo "Reference bundle: $reference_bundle" >> "$log_file"
-echo "Methylome_At_path: $Methylome_At_path" >> "$log_file"
+echo "Methylome_Plants_path: $Methylome_Plants_path" >> "$log_file"

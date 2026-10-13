@@ -51,8 +51,8 @@ set +o pipefail
 ### Whiptail-based UI fallback
 
 # Get the directory where the Bash script is located
-Methylome_At_path=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
-cd "$Methylome_At_path"
+Methylome_Plants_path=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
+cd "$Methylome_Plants_path"
 
 #####################################
 # Initialize and Activate Conda Env
@@ -190,7 +190,7 @@ apply_reference_capabilities() {
     bundle <- read_reference_bundle(args[1])
     caps <- bundle_capabilities(bundle)
     cat(paste(names(caps)[caps], collapse = ","))
-  ' "$bundle_path" "$Methylome_At_path" 2>/dev/null) || return 1
+  ' "$bundle_path" "$Methylome_Plants_path" 2>/dev/null) || return 1
 
   reference_has_capability() {
     [[ ",$capabilities," == *",$1,"* ]]
@@ -1073,17 +1073,17 @@ fi
 # Display yes/no dialog
 if (whiptail --title "All done!" --yesno "You have chosen to run: $chosen_message.\n\nWould you like to proceed?" 12 70); then
 
-  cd "$Methylome_At_path"
+  cd "$Methylome_Plants_path"
 
   # Bismark pipeline for 'cx_report' files
   if [[ " ${SELECTED_SCRIPTS[*]} " =~ "Bismark" ]]; then
     echo "Running run_bismark.sh..."
-    SAMPLES_FILE_CX=$(bash "$SCRIPT_BIS_PATH" -s "$SAMPLES_FILE" -g "$SCRIPT_BIS_genome" -n "$SCRIPT_BIS_ncores" -o "${Methylome_At_path}/bismark_CX_reports" --cx --mat | tail -n1)
+    SAMPLES_FILE_CX=$(bash "$SCRIPT_BIS_PATH" -s "$SAMPLES_FILE" -g "$SCRIPT_BIS_genome" -n "$SCRIPT_BIS_ncores" -o "${Methylome_Plants_path}/bismark_CX_reports" --cx --mat | tail -n1)
   else
     SAMPLES_FILE_CX="$SAMPLES_FILE"
   fi
 
-  cd "$Methylome_At_path"
+  cd "$Methylome_Plants_path"
 
   # Methylome.Plants pipeline invocation
   if [[ " ${SELECTED_SCRIPTS[*]} " =~ "Methylome.Plants" ]]; then

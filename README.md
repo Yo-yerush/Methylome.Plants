@@ -410,7 +410,7 @@ Optional arguments:
   --TEs_file                    Override the bundle TE annotation
   --reference_bundle            Species/assembly reference bundle YAML [default: bundled TAIR10 profile]
   --pipeline_path               Path to Methylome.Plants [default: current directory]
-  --Methylome_At_path           Deprecated alias for --pipeline_path
+  --Methylome_Plants_path           Deprecated alias for --pipeline_path
 
 DMRs analysis arguments:
   --minProportionDiff_CG        Minimum proportion difference for CG [default: 0.4]
