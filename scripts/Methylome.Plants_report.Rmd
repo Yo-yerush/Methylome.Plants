@@ -685,7 +685,7 @@ if (isTRUE(params$analyze_DMRs)) { safe_section({
     if (isTRUE(params$run_functional_groups)) {
         fg_dir <- file.path(genome_ann_path, "functional_groups")
         if (dir.exists(fg_dir)) {
-            cat("##### Functional groups {.tabset}\n\n")
+            # cat("##### Functional groups {.tabset}\n\n")
             fg_files <- list_media_files(fg_dir, recursive = TRUE)
             if (length(fg_files) == 0) {
                 cat("_No functional group plots found._\n\n")
@@ -699,7 +699,15 @@ if (isTRUE(params$analyze_DMRs)) { safe_section({
                 ## For bar files, replace pattern with ' summary'
                 bar_files_named <- setNames(
                     bar_files,
-                    gsub(paste0("_groups_barPlots_", params$var2, "_vs_", params$var1), " summary", tools::file_path_sans_ext(basename(bar_files)), ignore.case = TRUE)
+                    paste0(
+                        "Functional groups - ",
+                        gsub(
+                            paste0("_groups_barPlots_", params$var2, "_vs_", params$var1),
+                            "",
+                            tools::file_path_sans_ext(basename(bar_files)),
+                            ignore.case = TRUE
+                        )
+                    )
                 )
                 ## Try to group by context keywords in filenames
                 fg_cg <- rest_files[grepl("\\bcg\\b", basename(rest_files), ignore.case = TRUE)]

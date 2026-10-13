@@ -116,7 +116,7 @@ DMRs_circular_plot <- function(ann.file, TE_4_dens, comparison_name,
       count_by = "number",
       col = unname(direction_colours),
       border = TRUE,
-      track.height = 0.145,
+      track.height = 0.165,
       track.margin = c(0, 0)
     )
     circos.text(
@@ -133,7 +133,7 @@ DMRs_circular_plot <- function(ann.file, TE_4_dens, comparison_name,
       count_by = "number",
       col = annotation_colours,
       border = TRUE,
-      track.height = 0.145,
+      track.height = 0.165,
       track.margin = c(0, 0)
     )
   }

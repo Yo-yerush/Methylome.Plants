@@ -19,6 +19,24 @@ run_GO <- function(comparison_name, genome_ann_path, GO_path, n.cores,
     stop('GO annotation package is not installed: ', orgdb_package)
   }
 
+  if (is.null(gene2go)) {
+    orgdb <- getExportedValue(orgdb_package, orgdb_package)
+    if (is.null(orgdb_keytype)) orgdb_keytype <- AnnotationDbi::keytypes(orgdb)[1]
+
+    gene_ids <- AnnotationDbi::keys(orgdb, keytype = orgdb_keytype)
+    go_map <- AnnotationDbi::select(
+      orgdb, keys = gene_ids, columns = "GO", keytype = orgdb_keytype
+    )
+    go_map <- go_map[!is.na(go_map$GO), , drop = FALSE]
+    if (!nrow(go_map)) stop("No GO annotations found for the configured gene-ID type.")
+
+    mapped_go <- lapply(
+      split(go_map$GO, go_map[[orgdb_keytype]]), unique
+    )
+    gene2go <- setNames(vector("list", length(gene_ids)), gene_ids)
+    gene2go[names(mapped_go)] <- mapped_go
+  }
+  
   n.cores.ann = ifelse(n.cores >= 6, 6, n.cores)
   n.cores.cntx = ifelse(n.cores >= 18, 3, n.cores)
 
