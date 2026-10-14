@@ -60,7 +60,7 @@ run_GO <- function(comparison_name, genome_ann_path, GO_path, n.cores,
               ))
             },
             error = function(cond) {
-              message("Error in 'top.GO.fun': ",
+              message(time_msg(), "Error in 'top.GO.fun': ",
                       paste(ann_loop, contx_loop, gain_loss_loop, GO_type_loop, sep = "-"),
                       ": ", conditionMessage(cond))
               return("failed")
@@ -68,21 +68,36 @@ run_GO <- function(comparison_name, genome_ann_path, GO_path, n.cores,
           )
         }
       }
+      # tryCatch(
+      #   {
+      #     GO_one_plot(comparison_name, contx_loop, ann_loop, GO_path)
+      #     # message(time_msg(), paste0("\tdone: ",ann_loop," in ",contx_loop," context\t"))
+      #   },
+      #   error = function(cond) {
+      #     message(time_msg(), "Error in GO plot: ",
+      #             paste(ann_loop, contx_loop, sep = "-"),
+      #             ": ", conditionMessage(cond))
+      #     return("failed")
+      #   }
+      # )
+    }, mc.cores = n.cores.cntx)
+    message(time_msg(), paste0("\tdone: ", ann_loop))
+  }, mc.cores = n.cores.ann)
+
+  for (ann_loop in c("Genes", "Promoters", "CDS", "Introns", "fiveUTRs", "threeUTRs")) {
+    for (contx_loop in c("CG", "CHG", "CHH")) {
       tryCatch(
         {
           GO_one_plot(comparison_name, contx_loop, ann_loop, GO_path)
-          # message(paste0("\tdone: ",ann_loop," in ",contx_loop," context\t"))
         },
         error = function(cond) {
-          message("Error in GO plot: ",
+          message(time_msg(), "Error in GO plot: ",
                   paste(ann_loop, contx_loop, sep = "-"),
                   ": ", conditionMessage(cond))
-          return("failed")
         }
       )
-    }, mc.cores = n.cores.cntx)
-    message(paste0("\tdone: ", ann_loop))
-  }, mc.cores = n.cores.ann)
+    }
+  }
 }
 
 ########################################################
@@ -256,8 +271,6 @@ GO_one_plot <- function(treatment,
                                                    limits=limits_gain)
   }
   
-  
-  
   bubble_loss = loss_bind %>% 
     ggplot(aes(Significant, reorder(Term,-Fisher), size = Annotated, color = Fisher)) + 
     scale_color_gradient("p.value", low = loss_col, high = "black") + #theme_classic() +
@@ -283,8 +296,15 @@ GO_one_plot <- function(treatment,
   if (Height < 3) {Height = 3}
   #print(paste(treatment,context,annotation, sep = "_"))
   
+
+  # img_device(paste0(path_for__results,"/",treatment,"_",context,"_",annotation,"_GO"),
+  #     w = 9.90, h = Height)
+  # multiplot(bubble_gain, bubble_loss, cols=2)
+  # dev.off()
+
   img_device(paste0(path_for__results,"/",treatment,"_",context,"_",annotation,"_GO"),
       w = 9.90, h = Height)
-  multiplot(bubble_gain, bubble_loss, cols=2)
-  dev.off()
+  plot_device <- dev.cur()
+  on.exit(dev.off(plot_device), add = TRUE)
+  multiplot(bubble_gain, bubble_loss, cols = 2)
 }

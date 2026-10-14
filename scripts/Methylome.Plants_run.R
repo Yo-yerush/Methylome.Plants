@@ -2,10 +2,27 @@ options(width = 100, warn = -1)
 
 # upload libraries
 lib_packages <- c(
-  "dplyr", "tidyr", "ggplot2", "DMRcaller", "rtracklayer", "lattice",
-  "PeakSegDisk", "topGO", "KEGGREST", "Rgraphviz", "yaml",
-  "GenomicFeatures", "geomtextpath", "plyranges", "parallel",
-  "RColorBrewer", "circlize", "cowplot", "knitr", "data.table"
+  "dplyr",
+  "tidyr",
+  "ggplot2",
+  "DMRcaller",
+  "rtracklayer",
+  "lattice",
+  "PeakSegDisk",
+  "topGO",
+  "KEGGREST",
+  "Rgraphviz",
+  "yaml",
+  "GenomicFeatures",
+  "geomtextpath",
+  "plyranges",
+  "parallel",
+  "RColorBrewer",
+  "circlize",
+  "cowplot",
+  "knitr",
+  "data.table",
+  "rrvgo"
 )
 for (n.pkg in seq(lib_packages)) {
   tryCatch(
@@ -88,7 +105,8 @@ try({
       configs[35]
     } else {
       file.path(rmv_d(configs[2]), 'reference_bundles/arabidopsis_thaliana_TAIR10.yaml')
-    }
-    )
+    },
+    run_REVIGO_analysis = length(configs) >= 36 && isTRUE(as.logical(configs[36]))
+  )
   # message("\n\nwarnings:\n", warnings())
 })

@@ -83,6 +83,7 @@ usage() {
   echo "  --TF_motifs                   Transcription factors motif analysis"
   echo "  --func_groups                 Functional groups genes overlap DMRs"
   echo "  --GO_analysis                 Perform GO analysis over DMRs"
+  echo "  --REVIGO                      Summarize GO terms with rrvgo [requires --GO_analysis]"
   echo "  --KEGG_pathways               Perform KEGG pathways analysis over DMRs"
   echo "  --all_analyses                Enable all analyses (sets all analysis flags above [pca --> KEGG_pathways])"
   echo ""
@@ -147,6 +148,7 @@ while [[ "$#" -gt 0 ]]; do
     --TF_motifs) TF_motifs=TRUE ;;
     --func_groups) func_groups=TRUE ;;
     --GO_analysis) GO_analysis=TRUE ;;
+    --REVIGO) REVIGO_analysis=TRUE ;;
     --KEGG_pathways) KEGG_pathways=TRUE ;;
     --all_analyses)
       pca=TRUE
@@ -274,6 +276,7 @@ echo "Total methylation per genic annotations: $total_meth_ann"
 echo "Transcription factors motif analysis: $TF_motifs"
 echo "Functional groups genes overlap DMRs: $func_groups"
 echo "GO Analysis: $GO_analysis"
+echo "REVIGO Analysis: $REVIGO_analysis"
 echo "KEGG Pathways: $KEGG_pathways"
 echo ""
 echo "Gene-body metaPlots: $Genes_mp"
@@ -344,6 +347,7 @@ Rscript ./scripts/Methylome.Plants_run.R \
 "$bin_size_features" \
 "$metaPlot_random_genes" \
 "$reference_bundle" \
+"$REVIGO_analysis" \
     2>> "$log_file"
 
 # Output again the configurations, now to the 'log' file
@@ -371,6 +375,7 @@ echo "Total methylation per genic annotations: $total_meth_ann" >> "$log_file"
 echo "Transcription factors motif analysis: $TF_motifs" >> "$log_file"
 echo "Functional groups genes overlap DMRs: $func_groups" >> "$log_file"
 echo "GO Analysis: $GO_analysis" >> "$log_file"
+echo "REVIGO Analysis: $REVIGO_analysis" >> "$log_file"
 echo "KEGG Pathways: $KEGG_pathways" >> "$log_file"
 echo "Analyze DMRs workflow: $DMR_analysis" >> "$log_file"
 echo "Analyze strand-specific DMRs: $strand_DMRs" >> "$log_file"

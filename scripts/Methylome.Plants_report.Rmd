@@ -44,6 +44,7 @@ params:
   run_TF_motifs: true
   run_functional_groups: true
   run_GO_analysis: false
+  run_REVIGO_analysis: false
   run_KEGG_pathways: false
 
   analyze_strand_asymmetry_DMRs: false
@@ -330,6 +331,7 @@ cat(sprintf("
 - %s DMR detection & annotation
 - %s Functional groups
 - %s GO analysis
+- %s GO term reduction (REVIGO)
 - %s KEGG pathways
 
 **MetaPlots**
@@ -354,6 +356,7 @@ check(params$run_TF_motifs),
 check(params$analyze_DMRs),
 check(params$run_functional_groups),
 check(params$run_GO_analysis),
+check(params$run_REVIGO_analysis)
 check(params$run_KEGG_pathways),
 check(params$run_TE_metaPlots),
 check(params$run_GeneBody_metaPlots),
@@ -753,14 +756,77 @@ if (isTRUE(params$analyze_DMRs)) { safe_section({
     #     }
     # }
 
-    ## GO / KEGG (plots only)
+    ## GO (plots only)
+    # if (isTRUE(params$run_GO_analysis)) {
+    #     cat("#### GO analysis\n\n")
+    #     emit_dir(file.path(exp_path, "GO_analysis"), recursive = TRUE, cols = params$default_plot_cols, max_height_px = params$plot_max_height_px)
+    # }
     if (isTRUE(params$run_GO_analysis)) {
-        cat("#### GO analysis\n\n")
-        emit_dir(file.path(exp_path, "GO_analysis"), recursive = TRUE, cols = params$default_plot_cols, max_height_px = params$plot_max_height_px)
+        cat("#### GO analysis {.tabset}\n\n")
+        go_files <- list_media_files(file.path(exp_path, "GO_analysis"))
+
+        if (!length(go_files)) cat("_No GO plots found._\n\n")
+
+        for (ann in c("Genes", "Promoters", "CDS", "Introns", "fiveUTRs", "threeUTRs")) {
+            for (cntx in c("CG", "CHG", "CHH")) {
+                files <- go_files[
+                    grepl(paste0("_", cntx, "_", ann, "_GO\\."), basename(go_files))
+                ]
+                if (!length(files)) next
+
+                cat("##### ", ann, " - ", cntx, "\n\n", sep = "")
+                emit_grid(files, cols = 1,
+                          max_height_px = params$plot_max_height_px)
+            }
+        }
     }
+
+    ## REVIGO (plots only)
+    if (isTRUE(params$run_REVIGO_analysis)) {
+        cat("#### GO term reduction {.tabset}\n\n")
+
+        for (cntx in c("CG", "CHG", "CHH", "all")) {
+            for (ann in c("Genes", "Promoters", "CDS", "Introns",
+                          "fiveUTRs", "threeUTRs")) {
+                folder <- file.path(exp_path, "REVIGO_analysis", cntx, ann)
+                files <- list_media_files(folder, recursive = TRUE)
+                if (!length(files)) next
+
+                cat("##### ", ann, " - ", cntx, " {.tabset}\n\n", sep = "")
+
+                for (ont in c("BP", "MF", "CC")) {
+                    files <- list_media_files(file.path(folder, ont))
+                    if (!length(files)) next
+
+                    cat("###### ", ont, "\n\n", sep = "")
+                    emit_grid(files, cols = params$default_plot_cols,
+                              max_height_px = params$plot_max_height_px)
+                }
+            }
+        }
+    }
+
+    ## KEGG (plots only)
+    # if (isTRUE(params$run_KEGG_pathways)) {
+    #     cat("#### KEGG pathways\n\n")
+    #     emit_dir(file.path(exp_path, "KEGG_pathway"), recursive = TRUE, cols = params$default_plot_cols, max_height_px = params$plot_max_height_px)
+    # }
     if (isTRUE(params$run_KEGG_pathways)) {
-        cat("#### KEGG pathways\n\n")
-        emit_dir(file.path(exp_path, "KEGG_pathway"), recursive = TRUE, cols = params$default_plot_cols, max_height_px = params$plot_max_height_px)
+        cat("#### KEGG pathways {.tabset}\n\n")
+        kegg_files <- list_media_files(file.path(exp_path, "KEGG_pathway"))
+
+        if (!length(kegg_files)) cat("_No KEGG plots found._\n\n")
+
+        for (ann in c("Genes", "Promoters", "CDS", "Introns", "fiveUTRs", "threeUTRs")) {
+            files <- kegg_files[
+                grepl(paste0("\\.", ann, "\\.KEGG\\."), basename(kegg_files))
+            ]
+            if (!length(files)) next
+
+            cat("##### ", ann, "\n\n", sep = "")
+            emit_grid(files, cols = 1,
+                      max_height_px = params$plot_max_height_px)
+        }
     }
 })}
 ```

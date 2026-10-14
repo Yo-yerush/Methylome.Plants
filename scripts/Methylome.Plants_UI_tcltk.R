@@ -32,7 +32,7 @@ ui_defaults <- function(pipeline = find_pipeline()) {
     feature_bins = "10", random = "10000",
     align = "0", methylome = "1", dmrs = "1", qc = "1", pca = "1",
     total = "1", chromosomes = "1", te_distance = "1", annotation_counts = "1",
-    tf = "1", groups = "1", go = "0", kegg = "0", strand = "0", dmv = "0",
+    tf = "1", groups = "1", go = "0", revigo = "0", kegg = "0", strand = "0", dmv = "0",
     delta_h = "0", te_mp = "1", gene_mp = "1", feature_mp = "0"
   )
 }
@@ -41,8 +41,7 @@ ui_analysis_labels <- c(
   dmrs = "Main DMR analysis", qc = "Sample QC and conversion controls",
   pca = "PCA", total = "Total methylation", chromosomes = "Chromosome profiles",
   te_distance = "TE size and centromere distance", annotation_counts = "Annotation counts",
-  tf = "TFBS density", groups = "Functional gene groups", go = "GO enrichment",
-  kegg = "KEGG pathways", strand = "Strand-specific DMRs", dmv = "DMVs",
+  tf = "TFBS density", groups = "Functional gene groups", go = "GO enrichment", revigo = "GO term reduction (rrvgo)", kegg = "KEGG pathways", strand = "Strand-specific DMRs", dmv = "DMVs",
   delta_h = "Experimental delta-H", te_mp = "TE metaplots",
   gene_mp = "Gene-body metaplots", feature_mp = "Gene-feature metaplots"
 )
@@ -69,7 +68,7 @@ pipeline_args <- function(s, sample_file) {
   }
   flags <- c(pca = "--pca", total = "--total_methylation", chromosomes = "--CX_ChrPlot",
              te_distance = "--TEs_distance_n_size", annotation_counts = "--total_meth_ann",
-             tf = "--TF_motifs", groups = "--func_groups", go = "--GO_analysis",
+             tf = "--TF_motifs", groups = "--func_groups", go = "--GO_analysis", revigo = "--REVIGO",
              kegg = "--KEGG_pathways", strand = "--strand_DMRs", dmv = "--DMVs",
              delta_h = "--dH", te_mp = "--MP_TEs", gene_mp = "--MP_Genes",
              feature_mp = "--MP_Gene_features")
@@ -111,6 +110,9 @@ validate_settings <- function(s) {
     if (!s["image_type"] %in% c("pdf", "svg", "png", "tiff", "jpeg", "bmp")) stop("Invalid image format.")
     if (!is_checked(s, "dmrs") && (is_checked(s, "go") || is_checked(s, "kegg"))) {
       stop("GO/KEGG need the main DMR analysis. Enable DMRs or disable GO/KEGG.")
+    }
+    if (is_checked(s, "revigo") && !is_checked(s, "go")) {
+      stop("REVIGO needs GO enrichment. Enable GO or disable REVIGO.")
     }
   }
   integer_keys <- "cores"
@@ -234,6 +236,7 @@ launch_ui <- function(pipeline = find_pipeline()) {
   state$methylome_widgets <- list()
   state$methylome_inputs <- list()
   state$dmr_widgets <- list()
+  state$revigo_widget <- NULL
   window <- tcltk::tktoplevel()
   tcltk::tkwm.title(window, "Methylome.Plants")
   tcltk::tkwm.geometry(window, "1040x800")
@@ -268,11 +271,22 @@ launch_ui <- function(pipeline = find_pipeline()) {
   }
   update_dmr_fields <- function() {
     if (as.character(tcltk::tclvalue(vars$dmrs)) != "1") {
-      for (key in c("groups", "go", "kegg")) tcltk::tclvalue(vars[[key]]) <- "0"
+      for (key in c("groups", "go", "revigo", "kegg")) tcltk::tclvalue(vars[[key]]) <- "0"
     }
     enabled <- if (as.character(tcltk::tclvalue(vars$methylome)) == "1" &&
                    as.character(tcltk::tclvalue(vars$dmrs)) == "1") "normal" else "disabled"
     for (widget in state$dmr_widgets) tcltk::tkconfigure(widget, state = enabled)
+    revigo_enabled <- enabled == "normal" &&
+      as.character(tcltk::tclvalue(vars$go)) == "1"
+
+    if (!revigo_enabled) tcltk::tclvalue(vars$revigo) <- "0"
+
+    if (!is.null(state$revigo_widget)) {
+      tcltk::tkconfigure(
+        state$revigo_widget,
+        state = if (revigo_enabled) "normal" else "disabled"
+      )
+    }
   }
   update_methylome_fields <- function() {
     enabled <- if (as.character(tcltk::tclvalue(vars$methylome)) == "1") "normal" else "disabled"
@@ -571,11 +585,14 @@ launch_ui <- function(pipeline = find_pipeline()) {
       key <- group_keys[i]
       checkbox <- tcltk::ttkcheckbutton(analyses, text = ui_analysis_labels[key],
                                        variable = vars[[key]])
-      if (key == "dmrs") tcltk::tkconfigure(checkbox, command = update_dmr_fields)
+      if (key %in% c("dmrs", "go")) {
+        tcltk::tkconfigure(checkbox, command = update_dmr_fields)
+      }
+      if (key == "revigo") state$revigo_widget <- checkbox
       tcltk::tkgrid(checkbox, row = row + i, column = column,
                    padx = 6, pady = 7, sticky = "w")
       state$methylome_widgets <- c(state$methylome_widgets, list(checkbox))
-      if (key %in% c("groups", "go", "kegg")) {
+      if (key %in% c("groups", "go", "revigo", "kegg")) {
         state$dmr_widgets <- c(state$dmr_widgets, list(checkbox))
       }
     }
@@ -583,7 +600,7 @@ launch_ui <- function(pipeline = find_pipeline()) {
   add_analysis_section("QC and total methylation",
                        c("qc", "total", "pca", "chromosomes", "te_distance", "annotation_counts", "tf"), 0, 0)
   add_analysis_section("Metaplots", c("te_mp", "gene_mp", "feature_mp"), 0, 9)
-  add_analysis_section("DMRs and downstream analyses", c("dmrs", "groups", "go", "kegg"), 1, 0)
+  add_analysis_section("DMRs and downstream analyses", c("dmrs", "groups", "go", "revigo", "kegg"), 1, 0)
   add_analysis_section("Other analyses", c("strand", "dmv", "delta_h"), 1, 6)
   preset <- function(mode) function() {
     values <- setNames(rep("0", length(keys)), keys)

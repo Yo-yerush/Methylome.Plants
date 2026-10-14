@@ -41,7 +41,7 @@ run_KEGG <- function(comparison_name, genome_ann_path, KEGG_path, n.cores,
           unique(kegg_id_map$gene_id[match(ids, kegg_id_map$kegg_id, nomatch = 0L)])
         })
       }
-      message("create KEGG 'gene to pathway' dataset: successfully")
+      message(time_msg(), "create KEGG 'gene to pathway' dataset: successfully")
     },
     error = function(cond) {
       stop("create KEGG 'gene to pathway' dataset: fail: ", conditionMessage(cond), call. = FALSE)
@@ -49,7 +49,7 @@ run_KEGG <- function(comparison_name, genome_ann_path, KEGG_path, n.cores,
   )
 
   # run kegg pathway plot fun
-  message("KEGG pathways for annotated DMRs...")
+  message(time_msg(), "KEGG pathways for annotated DMRs...")
   n.cores.ann <- ifelse(n.cores >= 6, 6, n.cores)
   n.cores.cntx <- ifelse(n.cores >= 18, 3, n.cores)
 
@@ -72,7 +72,7 @@ run_KEGG <- function(comparison_name, genome_ann_path, KEGG_path, n.cores,
             )
           },
           error = function(cond) {
-            message("Error in 'kegg.pathway.fun': ",
+            message(time_msg(), "Error in 'kegg.pathway.fun': ",
                     paste(ann_loop, contx_loop, gain_loss_loop, sep = "-"),
                     ": ", conditionMessage(cond))
             return("failed")
@@ -80,18 +80,30 @@ run_KEGG <- function(comparison_name, genome_ann_path, KEGG_path, n.cores,
         )
       }
     }, mc.cores = n.cores.cntx)
+    # tryCatch(
+    #   {
+    #     KEGG_one_plot(comparison_name, ann_loop, KEGG_path)
+    #     message(time_msg(), paste0("\tdone: ", ann_loop))
+    #   },
+    #   error = function(cond) {
+    #     message(time_msg(), "Error in kegg pathway plot: ", ann_loop,
+    #             ": ", conditionMessage(cond))
+    #     return("failed")
+    #   }
+    # )
+  }, mc.cores = n.cores.ann)
+  for (ann_loop in c("Genes", "Promoters", "CDS", "Introns", "fiveUTRs", "threeUTRs")) {
     tryCatch(
       {
         KEGG_one_plot(comparison_name, ann_loop, KEGG_path)
-        message(paste0("\tdone: ", ann_loop))
+        message(time_msg(), paste0("\tdone: ", ann_loop))
       },
       error = function(cond) {
-        message("Error in kegg pathway plot: ", ann_loop,
+        message(time_msg(), "Error in kegg pathway plot: ", ann_loop,
                 ": ", conditionMessage(cond))
-        return("failed")
       }
     )
-  }, mc.cores = n.cores.ann)
+  }
 }
 
 ########################################################
@@ -193,7 +205,7 @@ kegg.pathway.fun = function(treatment,
               quote = F, row.names = F)
   }
   
-  #message(paste(treatment,annotation,context,gain_OR_loss,">> done", sep = " - "))
+  #message(time_msg(), paste(treatment,annotation,context,gain_OR_loss,">> done", sep = " - "))
   setwd(start_path)
 }
 
@@ -248,8 +260,6 @@ KEGG_one_plot <- function(treatment,
                                                    limits=limits_gain)
   }
   
-  
-  
   bubble_loss = loss_bind %>% 
     ggplot(aes(Significant, reorder(pathway.name,Significant), color = p.value, size = Annotated)) + 
     scale_color_gradient("p.value", low = loss_col, high = "black") + #theme_classic() +
@@ -273,10 +283,13 @@ KEGG_one_plot <- function(treatment,
   Height = max(c(nrow(gain_bind),nrow(loss_bind)))/6.25
   if (Height < 3) {Height = 3}
   
+  # img_device(paste0(path_for_results,"/",treatment,".",annotation,".KEGG"),
+  #     w = 9.90, h = Height)
+  # multiplot(bubble_gain, bubble_loss, cols=2)
+  # dev.off()
   img_device(paste0(path_for_results,"/",treatment,".",annotation,".KEGG"),
       w = 9.90, h = Height)
-  multiplot(bubble_gain, bubble_loss, cols=2)
-  dev.off()
-  
-  #  print(paste(treatment,annotation, sep = "_"))
+  plot_device <- dev.cur()
+  on.exit(dev.off(plot_device), add = TRUE)
+  multiplot(bubble_gain, bubble_loss, cols = 2)
 }

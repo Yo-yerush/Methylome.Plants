@@ -36,7 +36,8 @@ Methylome.Plants_main <- function(var1, # control
                               reference_bundle_path = file.path(
                                 Methylome.Plants_path,
                                 'reference_bundles/arabidopsis_thaliana_TAIR10.yaml'
-                              )) {
+                              ),
+                              run_REVIGO_analysis = FALSE) {
   ###########################################################################
 
   start_time <- Sys.time()
@@ -187,6 +188,9 @@ Methylome.Plants_main <- function(var1, # control
   strand_asymmetry_path <- paste0(exp_path, "/Strand_Asymmetry_DMRs")
   DMV_analysis_path <- paste0(exp_path, "/DMV_analysis")
   metaPlot_path <- paste0(exp_path, "/MetaPlots")
+  GO_path <- paste0(exp_path, "/GO_analysis")
+  revigo_path <- paste0(exp_path, "/REVIGO_analysis")
+  KEGG_path <- paste0(exp_path, "/KEGG_pathway")
 
   TFBS_file <- bundle_get(reference_bundle, 'functional.tfbs')
   centromere_gr <- read_bundle_regions(reference_bundle, 'centromeres')
@@ -250,6 +254,7 @@ Methylome.Plants_main <- function(var1, # control
           tf_motifs = run_TF_motifs,
           functional_groups = run_functional_groups,
           go = run_GO_analysis,
+          revigo = run_REVIGO_analysis,
           kegg = run_KEGG_pathways,
           strand_dmrs = analyze_strand_asymmetry_DMRs,
           dmvs = analyze_DMVs,
@@ -824,16 +829,48 @@ Methylome.Plants_main <- function(var1, # control
       cat(sep_cat("GO analysis"))
       tryCatch(
         {
-          GO_path <- paste0(exp_path, "/GO_analysis")
           dir.create(GO_path, showWarnings = FALSE)
 
           message(time_msg(), "GO analysis for annotated DMRs...")
           run_GO(comparison_name, genome_ann_path, GO_path, n.cores, reference_bundle)
           message(time_msg(), "GO analysis for annotated DMRs: done\n")
+
+          if (run_REVIGO_analysis) {
+            tryCatch({
+              message(time_msg(), "REVIGO analysis...")
+              result <- run_REVIGO(GO_path, revigo_path, comparison_name, reference_bundle
+              )
+              message(time_msg(), "REVIGO: ",
+                      result$completed, " completed, ",
+                      result$skipped, " skipped, ",
+                      result$failed, " failed")
+            }, error = function(e) {
+              message(time_msg(), "REVIGO analysis: failed: ",
+                      conditionMessage(e))
+            })
+          }
         },
         error = function(cond) {
           cat("\n*\n GO analysis:\n", as.character(cond), "*\n")
           message(time_msg(), "GO analysis for annotated DMRs: fail\n")
+        }
+      )
+    }
+
+    ##### REVIGO analysis for annotated DMRs
+    if (run_REVIGO_analysis) {
+      cat(sep_cat("REVIGO analysis"))
+      tryCatch(
+        {
+          dir.create(revigo_path, showWarnings = FALSE)
+
+          message(time_msg(), "REVIGO analysis for annotated DMRs...")
+          run_REVIGO(GO_path, revigo_path, comparison_name, reference_bundle)
+          message(time_msg(), "REVIGO analysis for annotated DMRs: done\n")
+        },
+        error = function(cond) {
+          cat("\n*\n REVIGO analysis:\n", as.character(cond), "*\n")
+          message(time_msg(), "REVIGO analysis for annotated DMRs: fail\n")
         }
       )
     }
@@ -843,7 +880,6 @@ Methylome.Plants_main <- function(var1, # control
       cat(sep_cat("KEGG pathways"))
       tryCatch(
         {
-          KEGG_path <- paste0(exp_path, "/KEGG_pathway")
           dir.create(KEGG_path, showWarnings = FALSE)
 
           message(time_msg(), "KEGG pathways for annotated DMRs...")
@@ -1179,6 +1215,7 @@ Methylome.Plants_main <- function(var1, # control
             run_TF_motifs = run_TF_motifs,
             run_functional_groups = run_functional_groups,
             run_GO_analysis = run_GO_analysis,
+            run_REVIGO_analysis = run_REVIGO_analysis,
             run_KEGG_pathways = run_KEGG_pathways,
             analyze_strand_asymmetry_DMRs = analyze_strand_asymmetry_DMRs,
             analyze_DMVs = analyze_DMVs,
