@@ -2,6 +2,7 @@ Revigo_plots <- function(GO_df_up, GO_df_down,
                          GO_type, #direction,
                          show_labels=TRUE,
                          reference_bundle,
+                         semdata=NULL,
                          specific_terms_lables_up=NULL, # specific by term column
                          specific_terms_lables_down=NULL, # specific by term column
                          specific_parents_lables_up=NULL, # specific by parents column
@@ -358,7 +359,6 @@ scatter_plot_run_function <- function(x,x.file, x.file.suffix) {
          x.intersp = 0.8,
          y.intersp = 1)
   title(main = "Parent Term", cex.main = 1, adj = 0.01)
-  dev.off()
   })
 
   ## save tree map
@@ -378,12 +378,35 @@ scatter_plot_run_function <- function(x,x.file, x.file.suffix) {
   }
 
   # save scatter plot data frame
-  write.csv(x$revigo_df, paste0(x.file,x.file.suffix,"_ScatterData.csv"), row.names = F) 
+  write.csv(x$revigo_df, file.path(x.file, paste0(x.file.suffix, "_ScatterData.csv")), row.names = F) 
 }
 
 #############################################################################
 
 run_REVIGO <- function(go_results_path, revigo_path, comparison_name, reference_bundle) {
+  statuses <- character()
+
+  orgdb_package <- bundle_get(reference_bundle, "functional.orgdb_package")
+  orgdb_keytype <- bundle_get(reference_bundle, "functional.orgdb_keytype")
+
+  if (is.null(orgdb_package) || is.null(orgdb_keytype)) {
+    message(time_msg(),
+            "REVIGO: skipped (OrgDb package/keytype absent from bundle)")
+    return(list(completed = 0L, skipped = 1L, failed = 0L))
+  }
+
+  ontologies <- c("BP", "MF", "CC")
+  semdata_by_ontology <- setNames(
+    lapply(ontologies, function(ontology) {
+      GOSemSim::godata(
+        annoDb = orgdb_package,
+        keytype = orgdb_keytype,
+        ont = ontology
+      )
+    }),
+    ontologies
+  )
+
   for (context.l in c("CG","CHG","CHH","all")) {
     path2results_meth <- file.path(revigo_path, context.l)
     dir.create(path2results_meth, recursive = TRUE, showWarnings = FALSE)

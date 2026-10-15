@@ -356,7 +356,7 @@ check(params$run_TF_motifs),
 check(params$analyze_DMRs),
 check(params$run_functional_groups),
 check(params$run_GO_analysis),
-check(params$run_REVIGO_analysis)
+check(params$run_REVIGO_analysis),
 check(params$run_KEGG_pathways),
 check(params$run_TE_metaPlots),
 check(params$run_GeneBody_metaPlots),

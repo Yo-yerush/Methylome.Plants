@@ -41,7 +41,7 @@ ui_analysis_labels <- c(
   dmrs = "Main DMR analysis", qc = "Sample QC and conversion controls",
   pca = "PCA", total = "Total methylation", chromosomes = "Chromosome profiles",
   te_distance = "TE size and centromere distance", annotation_counts = "Annotation counts",
-  tf = "TFBS density", groups = "Functional gene groups", go = "GO enrichment", revigo = "GO term reduction (rrvgo)", kegg = "KEGG pathways", strand = "Strand-specific DMRs", dmv = "DMVs",
+  tf = "TFBS density", groups = "Functional gene groups", go = "GO enrichment", revigo = "GO term reduction (Revigo)", kegg = "KEGG pathways", strand = "Strand-specific DMRs", dmv = "DMVs",
   delta_h = "Experimental delta-H", te_mp = "TE metaplots",
   gene_mp = "Gene-body metaplots", feature_mp = "Gene-feature metaplots"
 )
@@ -112,7 +112,7 @@ validate_settings <- function(s) {
       stop("GO/KEGG need the main DMR analysis. Enable DMRs or disable GO/KEGG.")
     }
     if (is_checked(s, "revigo") && !is_checked(s, "go")) {
-      stop("REVIGO needs GO enrichment. Enable GO or disable REVIGO.")
+      stop("Revigo needs GO enrichment. Enable GO or disable Revigo.")
     }
   }
   integer_keys <- "cores"

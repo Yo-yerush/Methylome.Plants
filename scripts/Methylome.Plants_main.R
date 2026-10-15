@@ -835,6 +835,7 @@ Methylome.Plants_main <- function(var1, # control
           run_GO(comparison_name, genome_ann_path, GO_path, n.cores, reference_bundle)
           message(time_msg(), "GO analysis for annotated DMRs: done\n")
 
+          #### REVIGO analysis for GO term outputs
           if (run_REVIGO_analysis) {
             tryCatch({
               message(time_msg(), "REVIGO analysis...")
@@ -853,24 +854,6 @@ Methylome.Plants_main <- function(var1, # control
         error = function(cond) {
           cat("\n*\n GO analysis:\n", as.character(cond), "*\n")
           message(time_msg(), "GO analysis for annotated DMRs: fail\n")
-        }
-      )
-    }
-
-    ##### REVIGO analysis for annotated DMRs
-    if (run_REVIGO_analysis) {
-      cat(sep_cat("REVIGO analysis"))
-      tryCatch(
-        {
-          dir.create(revigo_path, showWarnings = FALSE)
-
-          message(time_msg(), "REVIGO analysis for annotated DMRs...")
-          run_REVIGO(GO_path, revigo_path, comparison_name, reference_bundle)
-          message(time_msg(), "REVIGO analysis for annotated DMRs: done\n")
-        },
-        error = function(cond) {
-          cat("\n*\n REVIGO analysis:\n", as.character(cond), "*\n")
-          message(time_msg(), "REVIGO analysis for annotated DMRs: fail\n")
         }
       )
     }
