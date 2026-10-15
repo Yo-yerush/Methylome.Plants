@@ -832,6 +832,7 @@ Methylome.Plants_main <- function(var1, # control
           dir.create(GO_path, showWarnings = FALSE)
 
           message(time_msg(), "GO analysis for annotated DMRs...")
+          cat("GO analysis for annotated DMRs\n")
           run_GO(comparison_name, genome_ann_path, GO_path, n.cores, reference_bundle)
           message(time_msg(), "GO analysis for annotated DMRs: done\n")
 
@@ -839,7 +840,8 @@ Methylome.Plants_main <- function(var1, # control
           if (run_REVIGO_analysis) {
             tryCatch({
               message(time_msg(), "REVIGO analysis...")
-              result <- run_REVIGO(GO_path, revigo_path, comparison_name, reference_bundle
+              cat("REVIGO analysis\n")
+              result <- run_REVIGO(GO_path, revigo_path, comparison_name, reference_bundle, n.cores = n.cores
               )
               message(time_msg(), "REVIGO: ",
                       result$completed, " completed, ",

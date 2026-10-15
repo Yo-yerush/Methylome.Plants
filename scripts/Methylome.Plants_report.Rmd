@@ -789,18 +789,52 @@ if (isTRUE(params$analyze_DMRs)) { safe_section({
             for (ann in c("Genes", "Promoters", "CDS", "Introns",
                           "fiveUTRs", "threeUTRs")) {
                 folder <- file.path(exp_path, "REVIGO_analysis", cntx, ann)
-                files <- list_media_files(folder, recursive = TRUE)
+                files <- list_media_files(folder, recursive = TRUE, pattern = "ScatterPlot")
                 if (!length(files)) next
 
                 cat("##### ", ann, " - ", cntx, " {.tabset}\n\n", sep = "")
 
                 for (ont in c("BP", "MF", "CC")) {
-                    files <- list_media_files(file.path(folder, ont))
+                    files <- list_media_files(
+                        file.path(folder, ont), pattern = "ScatterPlot"
+                    )
                     if (!length(files)) next
 
                     cat("###### ", ont, "\n\n", sep = "")
-                    emit_grid(files, cols = params$default_plot_cols,
-                              max_height_px = params$plot_max_height_px)
+
+                    panels <- c(
+                        "Hyper-DMRs" = "_gain_ScatterPlot\\.",
+                        "Hypo-DMRs" = "_loss_ScatterPlot\\.",
+                        "Legend" = "_ScatterPlot_legend\\."
+                    )
+
+                    cat('<div style="display:flex;gap:12px;align-items:flex-start;">\n')
+
+                    for (label in names(panels)) {
+                        selected <- files[
+                            grepl(panels[[label]], basename(files),
+                                  ignore.case = TRUE)
+                        ]
+
+                        width <- if (label == "Legend") "0.45" else "1"
+                        cat('<div style="flex:', width, ';min-width:0;">\n',
+                            sep = "")
+                        cat('<p style="text-align:center;font-weight:bold;font-size:16px;">',
+                            label, '</p>\n', sep = "")
+
+                        if (length(selected)) {
+                            emit_grid(
+                                selected, cols = 1,
+                                max_height_px = params$plot_max_height_px
+                            )
+                        } else {
+                            cat('<p style="text-align:center;">No plot available.</p>\n')
+                        }
+
+                        cat('</div>\n')
+                    }
+
+                    cat('</div>\n\n')
                 }
             }
         }

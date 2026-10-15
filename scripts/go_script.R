@@ -24,8 +24,10 @@ run_GO <- function(comparison_name, genome_ann_path, GO_path, n.cores,
     if (is.null(orgdb_keytype)) orgdb_keytype <- AnnotationDbi::keytypes(orgdb)[1]
 
     gene_ids <- AnnotationDbi::keys(orgdb, keytype = orgdb_keytype)
-    go_map <- AnnotationDbi::select(
-      orgdb, keys = gene_ids, columns = "GO", keytype = orgdb_keytype
+    go_map <- suppressMessages(
+      AnnotationDbi::select(
+        orgdb, keys = gene_ids, columns = "GO", keytype = orgdb_keytype
+      )
     )
     go_map <- go_map[!is.na(go_map$GO), , drop = FALSE]
     if (!nrow(go_map)) stop("No GO annotations found for the configured gene-ID type.")
@@ -167,7 +169,7 @@ top.GO.fun = function(treatment,
   }
   
   sg <- sigGenes(myGOdata)
-  str(sg)
+  # str(sg)
   numSigGenes(myGOdata)
   
   resultFisher <- runTest(myGOdata, algorithm = GO_algorithm, statistic = "fisher")
@@ -207,9 +209,21 @@ top.GO.fun = function(treatment,
   
   setwd(new_path)
   if (nrow(allRes_view) > 0) {
-    printGraph(myGOdata, resultFisher, 
-               firstSigNodes = n.nodes, fn.prefix= paste(GO_Ontology_type,annotation,context,gain_OR_loss,treatment, sep = "_"),
-               useInfo="all", pdfSW= T)
+    # printGraph(myGOdata, resultFisher, 
+    #            firstSigNodes = n.nodes, fn.prefix= paste(GO_Ontology_type,annotation,context,gain_OR_loss,treatment, sep = "_"),
+    #            useInfo="all", pdfSW= T)
+    invisible(capture.output(
+      printGraph(
+        myGOdata, resultFisher,
+        firstSigNodes = n.nodes,
+        fn.prefix = paste(
+          GO_Ontology_type, annotation, context,
+          gain_OR_loss, treatment, sep = "_"
+        ),
+        useInfo = "all",
+        pdfSW = TRUE
+      )
+    ))
   }
   setwd(start_path)
 }
@@ -252,7 +266,8 @@ GO_one_plot <- function(treatment,
   loss_col = "#6397eb"
   
   bubble_gain = gain_bind %>% 
-    ggplot(aes(Significant, reorder(Term,-Fisher), size = Annotated, color = Fisher)) + 
+    # ggplot(aes(Significant, reorder(Term,-Fisher), size = Annotated, color = Fisher)) + 
+    ggplot(aes(Significant, reorder(Term,Significant), size = Annotated, color = Fisher)) + 
     scale_color_gradient("p.value", low = gain_col, high = "black") + #theme_classic() +
     labs(#title = paste0(type_name," - ",gain_loss,"regulated transcripts"),
       x = "Significant", y = "") + theme_bw() + 
@@ -272,7 +287,8 @@ GO_one_plot <- function(treatment,
   }
   
   bubble_loss = loss_bind %>% 
-    ggplot(aes(Significant, reorder(Term,-Fisher), size = Annotated, color = Fisher)) + 
+    # ggplot(aes(Significant, reorder(Term,-Fisher), size = Annotated, color = Fisher)) + 
+    ggplot(aes(Significant, reorder(Term,Significant), size = Annotated, color = Fisher)) + 
     scale_color_gradient("p.value", low = loss_col, high = "black") + #theme_classic() +
     labs(#title = paste0(type_name," - ",gain_loss,"regulated transcripts"),
       x = "Significant", y = "") + theme_bw() + 
