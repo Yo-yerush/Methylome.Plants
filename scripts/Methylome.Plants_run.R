@@ -51,8 +51,8 @@ suppressWarnings({
   var_table <- read.csv(configs[1], header = F, sep = var_sep_format)
 })
 vars_vector <- unique(var_table[, 1])
-var1_path <- var_table[grep(vars_vector[1], var_table[, 1]), 2]
-var2_path <- var_table[grep(vars_vector[2], var_table[, 1]), 2]
+var1_path <- var_table[var_table[, 1] == vars_vector[1], 2]
+var2_path <- var_table[var_table[, 1] == vars_vector[2], 2]
 
 # remove "/" from the end of a path strings
 rmv_d <- function(x) {

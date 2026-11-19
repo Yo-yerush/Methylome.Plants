@@ -98,7 +98,7 @@ qc_meth_distribution <- function(meth_var1, meth_var2, annotation.gr, TE_gr,
                                  promoter_upstream = 2000L) {
 
   Genes_0 <- annotation.gr[annotation.gr$type == "gene"]
-  coding_mask <- grepl("protein_coding", Genes_0$gene_model_type)
+  coding_mask <- grepl("^protein_coding$", Genes_0$gene_model_type)
   Genes <- if (any(coding_mask, na.rm = TRUE)) Genes_0[coding_mask %in% TRUE] else Genes_0
   Promoters <- safe_promoters(Genes, promoter_upstream)
 

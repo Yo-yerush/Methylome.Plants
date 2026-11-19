@@ -18,10 +18,16 @@ conversionRate <- function(methylationData, var,
   }
 
   methylation_df <- as.data.frame(S4Vectors::mcols(methylationData))
-  readsM_pos <- grep("^readsM", names(methylation_df))
+
+  # readsM_pos <- grep("^readsM", names(methylation_df))
+  readsM_pos <- grep("^readsM[0-9]*$", names(methylation_df))
+
   rows <- lapply(readsM_pos, function(i) {
     reads_m <- methylation_df[[i]]
-    reads_n <- methylation_df[[i + 1L]]
+
+    # reads_n <- methylation_df[[i + 1L]]
+    reads_n <- methylation_df[[sub("^readsM", "readsN", names(methylation_df)[i])]]
+    
     ratio <- reads_m / reads_n
     rate <- (1 - mean(ratio[is.finite(ratio)], na.rm = TRUE)) * 100
     message(time_msg(), var, ":	", round(rate, 2), "%")

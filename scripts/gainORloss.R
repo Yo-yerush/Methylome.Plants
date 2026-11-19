@@ -1,8 +1,11 @@
 gainORloss <- function(DMRsReplicates, context, comparison_name, up_col = "#d96c6c", down_col = "#6c96d9", add_count = FALSE) {
   gainORloss_vec <- DMRsReplicates$regionType
 
-  gain_DMRs <- length(grep("gain", gainORloss_vec))
-  loss_DMRs <- length(grep("loss", gainORloss_vec))
+  # gain_DMRs <- length(grep("gain", gainORloss_vec))
+  # loss_DMRs <- length(grep("loss", gainORloss_vec))
+  gain_DMRs <- sum(gainORloss_vec == "gain", na.rm = TRUE)
+  loss_DMRs <- sum(gainORloss_vec == "loss", na.rm = TRUE)
+  
   total <- gain_DMRs + loss_DMRs
   pres_gain <- round((gain_DMRs / total) * 100, 1)
   pres_loss <- round((loss_DMRs / total) * 100, 1)

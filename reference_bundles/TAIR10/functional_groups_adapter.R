@@ -219,9 +219,9 @@ DMRs_into_groups <- function(
         Histone_Lysine_MTs = rbind(
             HLM_group,
             DMR_file[grep("SET domain", gsub("SET-domain", "SET domain", DMR_file$short_description)), ],
-            DMR_file[grep("atx[1-9]|atxr[1-9]|SDG[1-100]", tolower(DMR_file$Symbol)), ], # SDG
-            DMR_file[grep("atx[1-9]|atxr[1-9]|SDG[1-100]", tolower(DMR_file$old_symbols)), ], # SDG
-            DMR_file[grep("atx[1-9]|atxr[1-9]|SDG[1-100]", tolower(DMR_file$Protein.names)), ], # SDG
+            DMR_file[grep("atxr?[0-9]+|sdg[0-9]+", tolower(DMR_file$Symbol)), ], # SDG
+            DMR_file[grep("atxr?[0-9]+|sdg[0-9]+", tolower(DMR_file$old_symbols)), ], # SDG
+            DMR_file[grep("atxr?[0-9]+|sdg[0-9]+", tolower(DMR_file$Protein.names)), ], # SDG
             DMR_file[grep("class v-like sam-binding methyltransferase", tolower(DMR_file$Protein.families)), ] # SAM_MT
         ),
         RdDM_pathway = rddm_group,

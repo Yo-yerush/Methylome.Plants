@@ -26,8 +26,10 @@ DMRs_ann_plots <- function(var1, var2, context, dH_analysis = F) {
       ann_plot_vec <- data.frame()
     }
 
-    ann_plot_final_df[grep(ann.loop, ann_plot_final_df$ann), 2] <- length(ann_plot_vec)
-    ann_plot_final_df[grep(ann.loop, ann_plot_final_df$ann), 3] <- length(ann_plot_vec[ann_plot_vec == "gain"])
+    # ann_plot_final_df[grep(ann.loop, ann_plot_final_df$ann), 2] <- length(ann_plot_vec)
+    # ann_plot_final_df[grep(ann.loop, ann_plot_final_df$ann), 3] <- length(ann_plot_vec[ann_plot_vec == "gain"])
+    ann_plot_final_df[which(ann_plot_final_df$ann == ann.loop), 2] <- length(ann_plot_vec)
+    ann_plot_final_df[which(ann_plot_final_df$ann == ann.loop), 3] <- length(ann_plot_vec[ann_plot_vec == "gain"])
   }
 
   ann_plot_final_df$percent <- round((ann_plot_final_df$gain / ann_plot_final_df$total) * 100, digits = 1)
